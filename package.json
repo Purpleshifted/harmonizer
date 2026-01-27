@@ -9,9 +9,18 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "@react-three/postprocessing": "^3.0.4",
+    "@tonaljs/tonal": "^4.10.0",
+    "@types/three": "^0.182.0",
     "next": "16.1.4",
+    "postprocessing": "^6.38.2",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "reverb.js": "^1.0.2",
+    "three": "^0.182.0",
+    "tone": "^15.1.22"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
