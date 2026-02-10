@@ -10,7 +10,7 @@ import {
     getNearestTriangles,
     SPACING,
     type TriangleInfo,
-} from '../utils/tonnetzMath';
+} from '../core/ToneSystem';
 
 export type InteractionMode = 'node' | 'edge' | 'face';
 

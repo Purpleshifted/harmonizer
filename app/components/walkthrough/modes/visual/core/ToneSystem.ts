@@ -2,8 +2,8 @@
 import * as THREE from 'three';
 
 export const SPACING = 12.0;
-export const VIEW_RADIUS = 20;
-export const GRID_SIZE = VIEW_RADIUS * 2 + 1; // 31x31 grid
+export const VIEW_RADIUS = 100;
+export const GRID_SIZE = VIEW_RADIUS * 2 + 1; // 161x161 grid
 export const TOTAL_INSTANCES = GRID_SIZE * GRID_SIZE;
 export const CAMERA_HEIGHT = 2.5; // Slightly raised from 2.0
 

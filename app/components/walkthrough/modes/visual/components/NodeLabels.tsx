@@ -9,7 +9,7 @@ import {
     getWorldToGrid,
     getNodeWorldPosition,
     CAMERA_HEIGHT,
-} from '../utils/tonnetzMath';
+} from '../core/ToneSystem';
 
 const LABEL_RANGE = 25;
 const MAX_LABELS = 15;
