@@ -23,6 +23,8 @@ import { NodeLabels } from './visual/NodeLabels';
 
 // Audio (refactored to separate module)
 import { AudioController } from './audio/AudioController';
+import { preloadInstruments } from './audio/core/InstrumentFactory';
+import { preloadReverbs } from './audio/core/ReverbFactory';
 
 // Camera height adjustment for node mode
 const NODE_MODE_HEIGHT_BOOST = 0;
@@ -67,10 +69,12 @@ function SceneContent({
     isAudioReady,
     setIsAudioReady,
     onLocationUpdate,
+    areSamplesLoaded,
 }: {
     isAudioReady: boolean;
     setIsAudioReady: (ready: boolean) => void;
     onLocationUpdate: (info: string, type: string) => void;
+    areSamplesLoaded: boolean;
 }) {
     const [detection, setDetection] = useState<DetectionResult | null>(null);
     const detectionRef = useRef<DetectionResult | null>(null); // High-frequency data for Audio
@@ -124,8 +128,8 @@ function SceneContent({
                 />
             </EffectComposer>
 
-            {/* Audio controller: Reads from Ref for performance */}
-            <AudioController isAudioReady={isAudioReady} detectionRef={detectionRef} />
+            {/* Audio controller: Only active when locked AND loaded */}
+            <AudioController isAudioReady={isAudioReady && areSamplesLoaded} detectionRef={detectionRef} />
 
             {/* Camera and controls */}
             <CameraController
@@ -140,11 +144,9 @@ function SceneContent({
                 onUnlock={() => {
                     console.log("Pointer unlocked, stopping audio");
                     setIsAudioReady(false);
-                    // Optional: Tone.Transport.stop() or Tone.Destination.mute = true?
-                    // AudioController's useEffect cleanup handles disposing/stopping players.
                 }}
                 onLock={() => {
-                    console.log("Pointer locked, starting audio");
+                    console.log("Pointer locked, starting audio context");
                     setIsAudioReady(true);
                 }}
             />
@@ -159,6 +161,8 @@ export default function TonnetzWalkthrough() {
     const [locationInfo, setLocationInfo] = useState('...');
     const [locationType, setLocationType] = useState('Initializing');
     const [isAudioReady, setIsAudioReady] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [areSamplesLoaded, setAreSamplesLoaded] = useState(false);
 
     const handleLocationUpdate = useCallback((info: string, type: string) => {
         setLocationInfo(info);
@@ -166,12 +170,26 @@ export default function TonnetzWalkthrough() {
     }, []);
 
     const handleEnter = async () => {
+        if (isLoading) return;
+        setIsLoading(true);
+
         try {
             await Tone.start();
             console.log('Audio context started');
+
+            // Preload samples
+            await Promise.all([
+                preloadInstruments(),
+                preloadReverbs()
+            ]);
+            console.log('Orchestra & Hall loaded');
+            setAreSamplesLoaded(true);
+
             setIsAudioReady(true);
         } catch (err) {
             console.error('Failed to start audio:', err);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -188,6 +206,7 @@ export default function TonnetzWalkthrough() {
                     isAudioReady={isAudioReady}
                     setIsAudioReady={setIsAudioReady}
                     onLocationUpdate={handleLocationUpdate}
+                    areSamplesLoaded={areSamplesLoaded}
                 />
             </Canvas>
 
@@ -216,9 +235,9 @@ export default function TonnetzWalkthrough() {
                 <div
                     id="play-button"
                     onClick={handleEnter}
-                    className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-full backdrop-blur border border-white/20 transition"
+                    className={`cursor-pointer bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-full backdrop-blur border border-white/20 transition ${isLoading ? 'opacity-50 cursor-wait' : ''}`}
                 >
-                    Click to Enter
+                    {isLoading ? 'Loading Orchestra...' : 'Click to Enter'}
                 </div>
             </div>
         </div>

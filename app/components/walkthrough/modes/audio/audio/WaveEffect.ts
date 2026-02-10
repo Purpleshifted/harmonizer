@@ -14,6 +14,7 @@ import * as Tone from 'tone';
 import * as THREE from 'three';
 import { createSpatialPanner } from './core/SpatialAudio';
 import { ConvolutionReverb } from './core/ConvolutionReverb';
+import { getReverbBuffer } from './core/ReverbFactory';
 
 type WaveMode = 'major' | 'minor' | 'edge' | 'idle';
 
@@ -85,9 +86,10 @@ export class WaveEffect {
 
     private async loadIR() {
         try {
-            await this.convReverb.load(this.IR_PATH);
+            const cached = getReverbBuffer(this.IR_PATH);
+            await this.convReverb.load(this.IR_PATH, cached);
             this.isReverbLoaded = true;
-            console.log('[WaveEffect] IR loaded successfully');
+            console.log('[WaveEffect] IR loaded (Cached: ' + !!cached + ')');
         } catch (error) {
             console.warn('[WaveEffect] IR load failed, using dry signal:', error);
             // Fallback: connect gain directly to destination

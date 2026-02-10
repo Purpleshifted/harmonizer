@@ -3,6 +3,9 @@
  * 
  * Uses Tone.Sampler for realistic instrument sounds.
  * Samples are loaded from /public/samples/
+ * 
+ * OPTIMIZED: Uses shared AudioBuffer cache to prevent redundant network requests.
+ * REFACTORED: Implements strict preloading to ensure smooth playback.
  */
 
 import * as Tone from 'tone';
@@ -11,22 +14,20 @@ import { clampOctave } from './NoteUtils';
 export type InstrumentName = 'contrabass' | 'cello' | 'french-horn';
 
 // Sample mappings per instrument (note -> file)
-// Keys MUST be valid Tone.js notes (e.g. "A#1" not "As1")
-// Values are file names (e.g. "As1.mp3")
 const SAMPLE_MAPS: Record<InstrumentName, Record<string, string>> = {
     contrabass: {
         'A2': 'A2.mp3',
-        'A#1': 'As1.mp3', // As -> A#
+        'A#1': 'As1.mp3',
         'B3': 'B3.mp3',
         'C2': 'C2.mp3',
-        'C#3': 'Cs3.mp3', // Cs -> C#
+        'C#3': 'Cs3.mp3',
         'D2': 'D2.mp3',
         'E2': 'E2.mp3',
         'E3': 'E3.mp3',
-        'F#1': 'Fs1.mp3', // Fs -> F#
+        'F#1': 'Fs1.mp3',
         'F#2': 'Fs2.mp3',
         'G1': 'G1.mp3',
-        'G#2': 'Gs2.mp3', // Gs -> G#
+        'G#2': 'Gs2.mp3',
         'G#3': 'Gs3.mp3',
     },
     cello: {
@@ -53,27 +54,106 @@ const SAMPLE_MAPS: Record<InstrumentName, Record<string, string>> = {
     }
 };
 
-// Define safe playing ranges for each instrument (to prevent playback errors)
 const INSTRUMENT_RANGES: Record<InstrumentName, { min: number, max: number }> = {
     contrabass: { min: 1, max: 3 },
     cello: { min: 2, max: 5 },
     'french-horn': { min: 2, max: 5 },
 };
 
+// === BUFFER CACHE SYSTEM ===
+// Stores loaded AudioBuffers to be reused across creating multiple Samplers
+const bufferCache: Map<string, Tone.ToneAudioBuffer> = new Map();
+let areSamplesLoaded = false;
+let preloadPromise: Promise<void> | null = null;
+
 /**
- * Load a single instrument sampler
+ * Preload all instrument samples into memory.
+ * Call this once at app startup.
+ */
+export async function preloadInstruments(): Promise<void> {
+    if (areSamplesLoaded) return;
+    if (preloadPromise) return preloadPromise;
+
+    console.log('[InstrumentFactory] Starting sample preload...');
+
+    const loadTask = async () => {
+        const loadPromises: Promise<void>[] = [];
+
+        for (const [instrumentKey, map] of Object.entries(SAMPLE_MAPS)) {
+            const instrument = instrumentKey as InstrumentName;
+            const baseUrl = `/samples/${instrument}/`;
+
+            for (const [note, filename] of Object.entries(map)) {
+                // Construct the full URL for the sample
+                const url = baseUrl + filename;
+
+                if (!bufferCache.has(url)) {
+                    // Create a Tone.Buffer explicitly
+                    const buffer = new Tone.ToneAudioBuffer();
+
+                    // Helper to load
+                    const p = buffer.load(url)
+                        .then(() => {
+                            bufferCache.set(url, buffer);
+                            // Optional: Progress log
+                        })
+                        .catch(err => {
+                            console.error(`[InstrumentFactory] Failed to load ${url}:`, err);
+                            // We don't throw here to allow partial loading, 
+                            // but playback might be missing notes.
+                        });
+                    loadPromises.push(p);
+                }
+            }
+        }
+
+        await Promise.all(loadPromises);
+        areSamplesLoaded = true;
+        console.log(`[InstrumentFactory] All ${bufferCache.size} samples loaded successfully.`);
+    };
+
+    preloadPromise = loadTask();
+    return preloadPromise;
+}
+
+/**
+ * Load a single instrument sampler using CACHED buffers
  */
 export function loadInstrument(name: InstrumentName): Tone.Sampler {
     const baseUrl = `/samples/${name}/`;
     const sampleMap = SAMPLE_MAPS[name];
 
-    return new Tone.Sampler({
-        urls: sampleMap,
-        baseUrl,
-        release: 4.0, // Long release for overlaps
-        attack: 2.5,  // Much softer attack for orchestral swelling
+    // Construct url map using buffers if available
+    const urls: Record<string, Tone.ToneAudioBuffer | string> = {};
+    let allCached = true;
+
+    for (const [note, filename] of Object.entries(sampleMap)) {
+        const url = baseUrl + filename;
+        if (bufferCache.has(url)) {
+            // Use cached buffer directly implies NO network request
+            urls[note] = bufferCache.get(url)!;
+        } else {
+            // Fallback (Should not happen if preloaded)
+            urls[note] = filename;
+            allCached = false;
+        }
+    }
+
+    // Config for sampler
+    const samplerOptions: Partial<Tone.SamplerOptions> = {
+        release: 4.0,
+        attack: 2.5,
         curve: 'exponential',
-    });
+        urls: urls,
+    };
+
+    // Only set baseUrl if we are NOT using buffers exclusively
+    if (!allCached) {
+        samplerOptions.baseUrl = baseUrl;
+    }
+
+    const sampler = new Tone.Sampler(samplerOptions);
+    return sampler;
 }
 
 /**
@@ -103,14 +183,6 @@ export function createOrchestraEnsemble(
 
     const ranges = instruments.map(name => INSTRUMENT_RANGES[name]);
 
-    let isLoaded = false;
-
-    // Wait for all samplers to load
-    Tone.loaded().then(() => {
-        isLoaded = true;
-        console.log('[OrchestraEnsemble] All samples loaded');
-    });
-
     function getClampedNote(note: string, index: number): string {
         const range = ranges[index];
         return clampOctave(note, range.min, range.max);
@@ -125,10 +197,16 @@ export function createOrchestraEnsemble(
 
     return {
         samplers,
-        get isLoaded() { return isLoaded; },
+        get isLoaded() {
+            // If buffers are cached, Sampler is ready practically immediately.
+            // Tone.Sampler with buffers doesn't need to 'load'.
+            return areSamplesLoaded || samplers.every(s => s.loaded);
+        },
 
         triggerAttack(note, time, velocity = 0.8) {
-            if (!isLoaded) return; // Wait for samples to load
+            // Strict check: if not loaded, don't play (silence).
+            // But if we used cached buffers, it IS loaded.
+            if (!this.isLoaded) return;
             samplers.forEach((s, i) => {
                 s.triggerAttack(processNotes(note, i), time, velocity);
             });
@@ -141,6 +219,7 @@ export function createOrchestraEnsemble(
         },
 
         triggerAttackRelease(note, duration, time, velocity = 0.8) {
+            if (!this.isLoaded) return;
             samplers.forEach((s, i) => {
                 s.triggerAttackRelease(processNotes(note, i), duration, time, velocity);
             });

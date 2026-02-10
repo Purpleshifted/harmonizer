@@ -3,7 +3,7 @@
 import { useRef, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { getTone } from '../../../../../lib/tonnetz';
+import { getTone, classifyTriad } from '../../../../../lib/tonnetz';
 import {
     getNodeWorldPosition,
     getWorldToGrid,
@@ -172,13 +172,16 @@ export function useSpatialDetection({ onDetectionUpdate }: UseSpatialDetectionPr
             // Face Mode
             mode = 'face';
             activeNodes = [c1, c2, c3];
-            const v1 = new THREE.Vector3().subVectors(c2.pos, c1.pos);
-            const v2 = new THREE.Vector3().subVectors(c3.pos, c1.pos);
-            const cross = v1.cross(v2).y;
-            isMajor = cross > 0;
+
+            // Interval-based classification
+            const analysis = classifyTriad(c1.note.value, c2.note.value, c3.note.value);
+            isMajor = analysis.isMajor;
 
             displayInfo = `${c1.note.name} ${c2.note.name} ${c3.note.name}`;
-            displayType = isMajor ? 'Major' : 'Minor';
+
+            // Format Display Type (e.g., "Major", "Minor", "Dim")
+            displayType = analysis.type.charAt(0).toUpperCase() + analysis.type.slice(1);
+            if (analysis.type === 'other') displayType = 'Triad';
 
             // Centroid
             centerPos = new THREE.Vector3()

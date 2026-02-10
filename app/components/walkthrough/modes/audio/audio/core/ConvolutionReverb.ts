@@ -42,8 +42,17 @@ export class ConvolutionReverb {
      * Load an Impulse Response file
      * @param url Path to the IR file (e.g., '/ir/cathedral.wav')
      */
-    async load(url: string): Promise<void> {
+    async load(url: string, cachedBuffer?: Tone.ToneAudioBuffer): Promise<void> {
         try {
+            if (cachedBuffer) {
+                // Instant load
+                this.convolver.buffer = cachedBuffer;
+                this.isLoaded = true;
+                // console.log(`[ConvolutionReverb] Used cached IR: ${url}`);
+                return;
+            }
+
+            // Fallback
             await this.convolver.load(url);
             this.isLoaded = true;
             console.log(`[ConvolutionReverb] Loaded IR: ${url}`);

@@ -1,0 +1,171 @@
+1. 
+    https://codepen.io/StarKnightt/pen/XJmjZEN
+2. 
+    https://codepen.io/VoXelo/pen/myeOpxr
+3. 
+    https://github.com/mrdoob/three.js/blob/master/examples/webgpu_tsl_vfx_linkedparticles.html
+4. 
+    https://codepen.io/filipz/pen/pvjjogQ
+5. 
+    https://github.com/mrdoob/three.js/blob/master/examples/webgpu_tsl_compute_attractors_particles.html
+6. 
+    https://github.com/mrdoob/three.js/blob/master/examples/webgpu_tsl_vfx_linkedparticles.html
+7. 
+    https://github.com/mrdoob/three.js/blob/master/examples/webgpu_shadowmap_pointlight.html
+8. 
+    https://codepen.io/shubniggurath/pen/BVKgJK
+9. 
+    https://dracarys.robertborghesi.is/
+    https://www.reddit.com/r/threejs/comments/1dnq1y0/dracarys_webgl_experiment_on_gpgpu_particles/
+10. 
+    https://davidpiegza.github.io/Graph-Visualization/index.html
+    https://github.com/davidpiegza/Graph-Visualization
+11. 
+    https://vasturiano.github.io/3d-force-graph/example/tree/
+    https://github.com/vasturiano/3d-force-graph
+    https://vasturiano.github.io/3d-force-graph/example/large-graph/
+12. 
+    https://demo.cubegl.org/
+    https://cubegl.org/#/
+    https://github.com/isjeffcom/CUBE.gl
+    https://discourse.threejs.org/t/cube-gl-data-driven-geospatial-data-visualization-framework/22053
+
+13. # organic shapes references for visual effects 
+    https://codepen.io/vcomics/full/jeWpgX
+    https://codepen.io/vcomics/pen/jeWpgX
+    https://codepen.io/vcomics/full/KBMyjE
+    https://codepen.io/vcomics/pen/KBMyjE
+    https://codepen.io/remid/pen/OgYjYV
+    https://codepen.io/elifitch/pen/MrWYvN
+    https://codepen.io/Samsy/pen/GpXXEj
+    # organic movement and terrain 
+    https://codepen.io/prisoner849/pen/vEKeaBO
+    https://codepen.io/marctannous/pen/RNGjmz
+    # organic visual effects
+    https://codepen.io/ada-lovecraft/pen/NNaqZz
+    https://codepen.io/ada-lovecraft/pen/zBwoVJ
+    # analogue visual
+    https://codepen.io/atzedent/pen/GgRXvbw
+    https://codepen.io/atzedent/pen/eYxZWrQ
+    # wave-like terrain idea
+    https://codepen.io/sabosugi/pen/emzpagK
+    https://codepen.io/supah/pen/oVweab
+    https://codepen.io/isladjan/pen/zYqLxeG
+    https://codepen.io/AzazelN28/pen/dQgaMx
+    # terrain with grid
+    https://codepen.io/osalinasv/pen/Epjaxp
+    # terrain (most desired visual for the project) explored
+    https://codepen.io/sabosugi/pen/XJdvYPg
+    
+14. # particle effects managements
+    https://codepen.io/Xanmia/full/nqyMgJ
+    https://codepen.io/Xanmia/pen/nqyMgJ
+    https://soulwire.github.io/WebGL-GPU-Particles/
+    https://codepen.io/YusukeNakaya/pen/dyZWRxa
+    https://codepen.io/VoXelo/pen/ByyBqVX
+    # along the grid 
+    https://codepen.io/deathfang/full/WxNVoq
+    https://codepen.io/deathfang/pen/WxNVoq
+
+15. # map exploration viewpoint control
+    https://codepen.io/vcomics/full/aGmoae
+    https://codepen.io/vcomics/pen/aGmoae
+    # infinite grid visual loaded
+    https://codepen.io/daniel-mu-oz/pen/gbPzKmd
+    # infinite terrain 
+    https://codepen.io/DonKarlssonSan/pen/deVYoZ
+
+
+
+16. # glass effect
+    https://codepen.io/daniel-mu-oz/pen/YPWpeYa
+    # light effect
+    https://codepen.io/tmrDevelops/pen/jbPbYY
+    https://codepen.io/hwnd1982/pen/oNrOObG
+    https://codepen.io/bartuc/pen/yopQKx
+    # management of bloom effect while interaction
+    https://codepen.io/sabosugi/pen/XJXobwO
+    # BG effect
+    https://codepen.io/wheresdara/pen/wvXBpwa
+    https://codepen.io/mimikos/pen/wKqyqY
+    https://codepen.io/jencrosby/pen/NWxZOyX
+    https://codepen.io/AzazelN28/pen/zvXZQw
+    # global lighting style 
+    https://codepen.io/sabosugi/pen/yyeqaGx
+    https://codepen.io/bclarke/pen/jOdyLYQ
+    # smoke effect
+    https://codepen.io/loktar00/pen/ndOpJX
+    # particle effect for some incidences
+    https://codepen.io/pixelomo/pen/ExbyvjK
+    https://codepen.io/VoXelo/pen/qEBBqza
+    # color references
+    https://codepen.io/cathbailh/pen/KLPoWm
+    https://codepen.io/atzedent/pen/RNRQGgK
+    https://codepen.io/chriscourses/pen/aZqrGr
+
+17. # neural visual 
+    https://codepen.io/VoXelo/pen/dPMeGze
+    https://codepen.io/sabosugi/pen/azZmLoB
+    https://codepen.io/VoXelo/pen/EaabxLj
+    # on grid
+    https://codepen.io/sabosugi/pen/emzdzmy
+    https://codepen.io/brttd/pen/ZWbVZj
+    https://codepen.io/raybeezdesign/pen/JjoOxg
+    # delivery 
+    https://codepen.io/sabosugi/pen/qENqdZm
+    https://codepen.io/mknadler/pen/oWRGKQ
+    https://codepen.io/VoXelo/pen/yyYJNRg
+    https://codepen.io/cmalven/pen/qZRYad
+    # for propagation of visual effect on the grid 
+    https://codepen.io/VaaLaa/pen/GgZPyOp 
+    https://codepen.io/jak_e/pen/ayjyXM
+    # lighting effect for edge mode
+    https://codepen.io/sabosugi/pen/raeEENJ
+
+18. # glowing visual effect with periodicity 
+    https://codepen.io/sabosugi/pen/jErWrMe
+    # within interaction 
+    https://codepen.io/VoXelo/pen/RNWQJdJ
+    # connected dots visual
+    https://codepen.io/fractalkitty/pen/QWYdWjd
+    https://codepen.io/VincentGarreau/pen/bGxvQd
+    https://codepen.io/jkiss/pen/OVEeqK
+    https://codepen.io/franky/pen/LGMWPK
+    https://codepen.io/technovore/pen/aOdGjY
+    # glowing in the space
+    https://codepen.io/atzedent/pen/oggKrGW
+
+
+19. # how fast moving: to be visually indicated
+    https://codepen.io/MoorLex/pen/RNayVKb
+    https://codepen.io/equant_org/pen/RNayBgp
+    https://codepen.io/ozgurkaragoz/pen/zxZRdM
+
+20. # interface for audio design with LEVA
+    https://codepen.io/aaroniker/pen/gbMbpEj
+
+21. # audio reactive visual
+    https://codepen.io/sabosugi/pen/XJKeqZj
+    https://codepen.io/ma77os/pen/xxyywo
+    https://codepen.io/infinitestack/pen/xxoOKzd
+    https://codepen.io/dilums/pen/MWjEqaa
+    https://codepen.io/filipz/pen/yyyRgry
+    https://codepen.io/NiklasKnaack/pen/WyWqja
+    https://codepen.io/teropa/pen/bRqYVj
+    
+    # audio and synched visual 
+    https://codepen.io/sabosugi/pen/ByzBXQW
+    https://codepen.io/zadvorsky/pen/vNVNYr
+    https://codepen.io/filipz/pen/dPygJGM
+    # audio and terrain 
+    https://codepen.io/NiklasKnaack/pen/Qxrmpz
+    # reactive: to be used for audio-synched effects
+    https://codepen.io/soulwire/pen/DdGRYG
+    https://codepen.io/natewiley/pen/yaZLgb
+    https://codepen.io/GabbeV/pen/DMRPox
+    https://codepen.io/ImagineProgramming/pen/LpOJzM
+    https://codepen.io/StarKnightt/pen/VYvZeom
+    
+22. # purely musical references
+    https://codepen.io/jak_e/pen/qNrZyw
+    https://codepen.io/jak_e/pen/EKRarY

@@ -40,12 +40,17 @@ const NOTE_NAMES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "
 
 /**
  * Calculates the Fifth Index for a given node.
- * @param u The horizontal axis index (increases index by 1)
- * @param v The vertical/diagonal axis index (decreases index by 4)
+ * @param u The horizontal axis index (increases index by 1 -> +7 semitones)
+ * @param v The vertical/diagonal axis index (increases index by 3 -> -3 semitones)
  * @param startOffset The starting fifth index offset (default 0 for C)
+ * 
+ * Grid Logic (Target):
+ * - Right (+u): +7 semitones (Perfect 5th)
+ * - Bottom-Right (+u, +v): +4 semitones (Major 3rd) -> 1 + 3 = 4 Fifths -> 4*7=28=4. Correct.
+ * - Bottom-Left (+v): -3 semitones (Minor 3rd down) -> +3 Fifths -> 3*7=21=9=-3. Correct.
  */
 function getFifthIndex(u: number, v: number, startOffset: number = 0): number {
-    return startOffset + u - 4 * v;
+    return startOffset + u + 3 * v;
 }
 
 /**
@@ -166,4 +171,60 @@ export function generateGridChunk(width: number, height: number, startU: number 
         }
     }
     return nodes;
+}
+
+// --- Chord Analysis ---
+
+export const TRIAD_SHAPES = {
+    MAJOR: [0, 4, 7],     // Major Root
+    MINOR: [0, 3, 7],     // Minor Root
+    DIM: [0, 3, 6],       // Diminished
+    AUG: [0, 4, 8],       // Augmented
+    SUS2: [0, 2, 7],      // Sus2
+    SUS4: [0, 5, 7],      // Sus4
+};
+
+export type TriadType = 'major' | 'minor' | 'dim' | 'aug' | 'other';
+
+/**
+ * Robustly classifies a triad formed by 3 pitch classes (0-11).
+ * Used simplified interval logic: Sort -> Normalize -> Match Pattern.
+ */
+export function classifyTriad(n1: number, n2: number, n3: number): { type: TriadType; isMajor: boolean } {
+    // 1. Sort pitch classes (a < b < c)
+    const sorted = [n1, n2, n3].sort((a, b) => a - b);
+    const a = sorted[0];
+    const b = sorted[1];
+    const c = sorted[2];
+
+    // 2. Calculate intervals relative to lowest note
+    // X = (0, b-a, c-a)
+    const i1 = b - a;
+    const i2 = c - a;
+
+    // 3. Match against known shapes
+    // Major shapes: (0,4,7), (0,3,8), (0,5,9)
+    if (
+        (i1 === 4 && i2 === 7) || // Root (C-E-G)
+        (i1 === 3 && i2 === 8) || // 1st Inv (E-G-C -> 4,7,0 -> 0,4,7 sorted? No. B-D#-F# -> 11,3,6 -> 3,6,11 -> 0,3,8)
+        (i1 === 5 && i2 === 9)    // 2nd Inv (A-C#-E -> 9,1,4 -> 1,4,9 -> 0,3,8. Wait. F#-A#-C# -> 6,10,1 -> 1,6,10 -> 0,5,9)
+    ) {
+        return { type: 'major', isMajor: true };
+    }
+
+    // Minor shapes: (0,3,7), (0,5,8), (0,4,9)
+    if (
+        (i1 === 3 && i2 === 7) || // Root (C-Eb-G)
+        (i1 === 5 && i2 === 8) || // 1st Inv (F-Ab-C -> 5,8,0 -> 0,5,8)
+        (i1 === 4 && i2 === 9)    // 2nd Inv (B-D-F# -> 11,2,6 -> 2,6,11 -> 0,4,9)
+    ) {
+        return { type: 'minor', isMajor: false };
+    }
+
+    // Handle Dim/Aug/Other
+    if (i1 === 3 && i2 === 6) return { type: 'dim', isMajor: false };
+    if (i1 === 4 && i2 === 8) return { type: 'aug', isMajor: true }; // Aug is generally major-ish
+
+    // Fallback
+    return { type: 'other', isMajor: false };
 }

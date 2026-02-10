@@ -13,6 +13,35 @@ import * as Tone from 'tone';
 
 export type ReverbPreset = 'ambient' | 'spatial' | 'deep' | 'wave' | 'room';
 
+// --- BUFFER CACHE ---
+const reverbBufferCache: Map<string, Tone.ToneAudioBuffer> = new Map();
+let areReverbsLoaded = false;
+
+export const IR_URLS = [
+    '/ir/1st-baptist-nashville/stereo/1st_baptist_nashville_far_wide.wav',
+];
+
+export async function preloadReverbs(): Promise<void> {
+    if (areReverbsLoaded) return;
+
+    console.log('[ReverbFactory] Starting IR preload...');
+    const promises = IR_URLS.map(url => {
+        if (reverbBufferCache.has(url)) return Promise.resolve();
+        const buffer = new Tone.ToneAudioBuffer();
+        return buffer.load(url).then(() => {
+            reverbBufferCache.set(url, buffer);
+        }).catch(e => console.error(`Failed to load IR: ${url}`, e));
+    });
+
+    await Promise.all(promises);
+    areReverbsLoaded = true;
+    console.log('[ReverbFactory] All IRs loaded.');
+}
+
+export function getReverbBuffer(url: string): Tone.ToneAudioBuffer | undefined {
+    return reverbBufferCache.get(url);
+}
+
 interface ReverbConfig {
     decay: number;
     wet: number;

@@ -66,6 +66,10 @@ export interface TriangleInfo {
     isMajor: boolean;
 }
 
+import { getTone, classifyTriad } from '../../../lib/tonnetz';
+
+// Local definitions removed. Using lib/tonnetz.
+
 /**
  * Get the 6 nearest triangles around a position
  * In a Tonnetz grid, each node is surrounded by 6 triangles
@@ -80,11 +84,9 @@ export function getNearestTriangles(
     // Define the 6 triangles around a node
     // Each triangle is defined by relative offsets from the center
     const triangleOffsets = [
-        // Upper triangles (Major - pointing up)
         [{ du: 0, dv: 0 }, { du: 1, dv: 0 }, { du: 0, dv: -1 }],
         [{ du: 0, dv: 0 }, { du: 0, dv: -1 }, { du: -1, dv: -1 }],
         [{ du: 0, dv: 0 }, { du: -1, dv: -1 }, { du: -1, dv: 0 }],
-        // Lower triangles (Minor - pointing down)
         [{ du: 0, dv: 0 }, { du: -1, dv: 0 }, { du: 0, dv: 1 }],
         [{ du: 0, dv: 0 }, { du: 0, dv: 1 }, { du: 1, dv: 1 }],
         [{ du: 0, dv: 0 }, { du: 1, dv: 1 }, { du: 1, dv: 0 }],
@@ -92,14 +94,30 @@ export function getNearestTriangles(
 
     for (let i = 0; i < triangleOffsets.length; i++) {
         const offsets = triangleOffsets[i];
-        const nodes = offsets.map(({ du, dv }) => {
-            const u = centerU + du;
-            const v = centerV + dv;
-            return { u, v, pos: getNodeWorldPosition(u, v) };
-        });
+
+        // Resolve coordinates
+        const u1 = centerU + offsets[0].du;
+        const v1 = centerV + offsets[0].dv;
+        const u2 = centerU + offsets[1].du;
+        const v2 = centerV + offsets[1].dv;
+        const u3 = centerU + offsets[2].du;
+        const v3 = centerV + offsets[2].dv;
+
+        const nodes = [
+            { u: u1, v: v1, pos: getNodeWorldPosition(u1, v1) },
+            { u: u2, v: v2, pos: getNodeWorldPosition(u2, v2) },
+            { u: u3, v: v3, pos: getNodeWorldPosition(u3, v3) },
+        ];
 
         const centroid = getTriangleCentroid(nodes[0].pos, nodes[1].pos, nodes[2].pos);
-        const isMajor = i < 3; // First 3 are major (pointing up)
+
+        // ANALYZE: Use actual note values to determine Major/Minor
+        const analysis = classifyTriad(
+            getTone(u1, v1).value,
+            getTone(u2, v2).value,
+            getTone(u3, v3).value
+        );
+        const isMajor = analysis.isMajor;
 
         triangles.push({ nodes, centroid, isMajor });
     }
