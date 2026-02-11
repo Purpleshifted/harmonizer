@@ -4,12 +4,12 @@ import React, { useMemo, useRef } from 'react';
 import { Html } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { getTone } from '../../../../lib/tonnetz';
+import { getTone } from '../../lib/tonnetz';
 import {
     getWorldToGrid,
     getNodeWorldPosition,
     CAMERA_HEIGHT,
-} from '../../../../lib/tonnetz-grid';
+} from '../../lib/tonnetz-grid';
 
 const LABEL_RANGE = 25;
 const MAX_LABELS = 15;

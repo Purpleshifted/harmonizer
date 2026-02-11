@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {
     getWorldToGrid,
     getNodeWorldPosition,
-} from '../../../../lib/tonnetz-grid';
+} from '../../lib/tonnetz-grid';
 
 const VIEW_RADIUS = 20;
 const GRID_SIZE = VIEW_RADIUS * 2 + 1;

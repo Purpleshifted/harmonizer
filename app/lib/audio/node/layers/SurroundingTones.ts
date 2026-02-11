@@ -1,103 +1,94 @@
+/**
+ * SurroundingTones - Creates intermittent, spatialized bell sparkles around the central node
+ * (Randomly picks one of the 6 surrounding notes to play)
+ */
+
 import * as Tone from 'tone';
 import * as THREE from 'three';
 import { ensureOctave } from '../../core/NoteUtils';
 import { SynthTank } from '../factory/SynthTank';
 import { Spatializer } from '../engine/Spatializer';
+import { Effector } from '../engine/Effectors';
 
-/**
- * SurroundingTones - Hexagonal bell-like sounds around the focal node
- */
 export class SurroundingTones {
-    private voices: {
-        synth: Tone.Synth;
-        spatializer: Spatializer;
-        gain: Tone.Gain;
-    }[] = [];
+    private synth: Tone.PolySynth;
+    private spatializer: Spatializer;
     private isPlaying = false;
-    private readonly MAX_VOICES = 6;
-    private loop: Tone.Loop | null = null;
-    private currentNotes: string[] = [];
-    private currentPositions: THREE.Vector3[] = [];
+    private isDisposed = false;
+
+    // Candidates state
+    private candidates: { note: string, pos: THREE.Vector3 }[] = [];
+    private loop: Tone.Loop;
 
     constructor() {
-        for (let i = 0; i < this.MAX_VOICES; i++) {
-            const synth = SynthTank.createBellSynth();
-            const spatializer = new Spatializer({ refDist: 5, maxDist: 35 });
-            const gain = new Tone.Gain(0); // Individual voice gain
+        this.synth = SynthTank.createBellSynth();
+        this.spatializer = new Spatializer({ hrtf: true, refDistance: 4, maxDistance: 40 });
 
-            synth.connect(spatializer.panner);
-            spatializer.panner.connect(gain);
+        // Connect Synth -> Spatializer
+        this.synth.connect(this.spatializer.panner);
 
-            this.voices.push({ synth, spatializer, gain });
-        }
-    }
-
-    public connect(destination: Tone.ToneAudioNode) {
-        this.voices.forEach(v => v.gain.connect(destination));
-        return this;
+        // Schedule random sparkles (Using Transport-synced loop for timing, but randomness inside)
+        this.loop = new Tone.Loop((time) => {
+            this.triggerRandomSparkle(time);
+        }, "1m").start(0); // Every measure (~2-3s)
     }
 
     /**
-     * Update nearby notes and their 3D positions
+     * Connect the spatial output to the effector's direct input (bypass lowpass filter)
      */
-    public start(notes: string[], positions: THREE.Vector3[]) {
-        if (notes.length === 0) return;
+    public connect(effector: Effector) {
+        this.spatializer.connect(effector.directInput);
+    }
 
+    /**
+     * Update the candidate pool of surrounding notes
+     */
+    public updateCandidates(notes: string[], positions: THREE.Vector3[]) {
+        if (notes.length !== positions.length) return;
+
+        this.candidates = notes.map((note, i) => ({
+            note,
+            pos: positions[i]
+        }));
+    }
+
+    private triggerRandomSparkle(time: number) {
+        if (!this.isPlaying || this.candidates.length === 0 || this.isDisposed) return;
+
+        // 30% chance to play on any given measure check
+        if (Math.random() > 0.4) return;
+
+        // Pick random neighbor
+        const idx = Math.floor(Math.random() * this.candidates.length);
+        const candidate = this.candidates[idx];
+        if (!candidate) return;
+
+        // 1. Move Spatializer to position (Immediate jump is fine for discrete sparkles)
+        this.spatializer.update(candidate.pos, 0.1);
+
+        // 2. Play Note
+        const note = ensureOctave(candidate.note, 5 + (Math.random() > 0.5 ? 1 : 0)); // Octave 5 or 6
+        const velocity = 0.3 + Math.random() * 0.3; // Soft velocity
+
+        this.synth.triggerAttackRelease(note, "8n", time, velocity);
+    }
+
+    public start() {
+        if (this.isDisposed) return;
         this.isPlaying = true;
-        this.currentNotes = notes;
-        this.currentPositions = positions;
-
-        // Setup individual voice volumes and spatial positions
-        const count = Math.min(this.currentNotes.length, this.MAX_VOICES);
-        for (let i = 0; i < count; i++) {
-            const v = this.voices[i];
-            v.gain.gain.rampTo(1.0, 1.0);
-            v.spatializer.update(this.currentPositions[i], 0.1);
-        }
-
-        // Initialize/Start a slow "wind chime" loop if not existing
-        if (!this.loop) {
-            this.loop = new Tone.Loop((time) => {
-                if (!this.isPlaying || this.currentNotes.length === 0) return;
-
-                // Randomly trigger one voice among active ones
-                const count = Math.min(this.currentNotes.length, this.MAX_VOICES);
-                const voiceIdx = Math.floor(Math.random() * count);
-                const v = this.voices[voiceIdx];
-
-                const noteName = this.currentNotes[voiceIdx];
-                if (!noteName) return;
-
-                const note = ensureOctave(noteName, 6); // High register bells
-
-                if (Math.random() < 0.4) {
-                    v.synth.triggerAttackRelease(note, "2n", time, 0.4 + Math.random() * 0.4);
-                }
-            }, "2n").start(0);
-        }
-
-        if (Tone.getTransport().state !== 'started') {
-            Tone.getTransport().start();
-        }
     }
 
     public stop() {
-        if (!this.isPlaying) return;
-        this.voices.forEach(v => v.gain.gain.rampTo(0, 1.0));
-        if (this.loop) {
-            this.loop.stop();
-            this.loop.dispose();
-            this.loop = null;
-        }
+        if (this.isDisposed) return;
         this.isPlaying = false;
+        this.synth.releaseAll();
     }
 
     public dispose() {
-        this.stop();
-        this.voices.forEach(v => {
-            v.synth.dispose();
-            v.spatializer.dispose();
-            v.gain.dispose();
-        });
+        if (this.isDisposed) return;
+        this.isDisposed = true;
+        this.loop.dispose();
+        this.synth.dispose();
+        this.spatializer.dispose();
     }
 }

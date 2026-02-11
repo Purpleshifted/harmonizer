@@ -1,6 +1,11 @@
+/**
+ * NodePlayer - Orchestrates the Node Mode audio experience
+ * Coordinates the Central Tone and Surrounding Tones via the Effector
+ */
+
 import * as Tone from 'tone';
 import * as THREE from 'three';
-import { Effector } from '../node/engine/Effector';
+import { Effector } from '../node/engine/Effectors';
 import { CentorTone } from '../node/layers/CentorTone';
 import { SurroundingTones } from '../node/layers/SurroundingTones';
 
@@ -8,89 +13,86 @@ export class NodePlayer {
     private effector: Effector;
     private centorTone: CentorTone;
     private surroundingTones: SurroundingTones;
+
     private isAudible = false;
     private isDisposed = false;
+    private stopTimeout: NodeJS.Timeout | null = null;
 
-    constructor(reverbs: any, mixer: any) {
-        // Main effector handles the wobbling filter and routing
-        this.effector = new Effector(reverbs.deep);
+    constructor(deepReverb: Tone.Reverb) {
+        // 1. Central Engine (Effects & Routing)
+        this.effector = new Effector(deepReverb);
 
-        // Layers
+        // 2. Layers
         this.centorTone = new CentorTone();
         this.surroundingTones = new SurroundingTones();
 
-        // Connect layers to the central effector
-        this.centorTone.connect(this.effector.filter);
-        this.surroundingTones.connect(this.effector.filter);
-
-        // Connect to mixer
-        this.effector.connect(mixer.masterBus);
+        // 3. Connect Layers -> Engine
+        this.centorTone.connect(this.effector);
+        this.surroundingTones.connect(this.effector); // Bypasses lowpass filter
     }
 
-    // For throttled heartbeat
-    private lastHeartbeat = 0;
-
     /**
-     * Update the player state based on detection
+     * Update loop to handle musical changes based on detection
      */
     public update(detection: any, structureChanged: boolean, _padVol: number) {
-        if (this.isDisposed) return;
+        if (this.isDisposed || !this.isAudible) return;
 
-        const isNodeMode = detection.mode === 'node';
-        const now = performance.now();
+        // 1. Central Pad Logic
+        if (detection.mode === 'node' && detection.activeNodes.length > 0) {
+            const currentNode = detection.activeNodes[0].note.name;
 
-        // Heartbeat log (every 2 seconds)
-        if (isNodeMode && now - this.lastHeartbeat > 2000) {
-            this.lastHeartbeat = now;
-            console.log(`[NodePlayer Heartbeat] Audible: ${this.isAudible}, Vol: ${_padVol}, Notes: ${detection.activeNodes?.length}`);
-        }
-
-        // 1. Update CentorTone (Main Pad)
-        if (isNodeMode && detection.activeNodes.length > 0) {
-            // Re-trigger if the node changed or if it was requested
-            if (structureChanged) {
-                console.log(`[NodePlayer] Mode: ${detection.mode}, StructureChanged: ${structureChanged}, Audibility: ${this.isAudible}`);
-                console.log(`[NodePlayer] Triggering CentorTone for node: ${detection.activeNodes[0].note.name}`);
-                this.centorTone.start(detection.activeNodes[0].note.name);
+            // Robust Triggering: Trigger if structure changed OR if it should be playing but isn't
+            if (structureChanged || !this.centorTone.active) {
+                this.centorTone.start(currentNode);
+            }
+        } else {
+            // Stop if not in node mode or no active nodes
+            if (this.centorTone.active) {
+                this.centorTone.stop();
             }
         }
 
-        // 2. Update SurroundingTones (Hexagonal Bells)
-        if (isNodeMode && detection.nearestNeighbors.length > 0) {
+        // 2. Surrounding Bell Logic
+        if (detection.mode === 'node' && detection.nearestNeighbors.length > 0) {
             const surroundingNotes = detection.nearestNeighbors.map((n: any) => n.note.name);
             const surroundingPos = detection.nearestNeighbors.map((n: any) => n.pos);
 
-            this.surroundingTones.start(surroundingNotes, surroundingPos);
+            // Update candidates pool for random sparkles
+            this.surroundingTones.updateCandidates(surroundingNotes, surroundingPos);
+            this.surroundingTones.start();
+        } else {
+            this.surroundingTones.stop();
         }
     }
 
-    /**
-     * Set global volume coming from LogicCore
-     */
     public setVolume(volume: number, rampTime: number = 0.1) {
         if (this.isDisposed) return;
 
-        // Effector handles the linear-to-db conversion and ramping
+        // Master Volume Control via Effector
         this.effector.setOutputVolume(volume, rampTime);
 
         if (volume > 0.001) {
-            if (!this.isAudible) console.log(`[NodePlayer] Becoming AUDIBLE (vol: ${volume})`);
             this.isAudible = true;
+            if (this.stopTimeout) {
+                clearTimeout(this.stopTimeout);
+                this.stopTimeout = null;
+            }
+            // Ensure Transport is running for bells
+            if (Tone.getTransport().state !== 'started') {
+                Tone.getTransport().start();
+            }
         } else {
-            if (this.isAudible) console.log(`[NodePlayer] Becoming SILENT`);
             this.isAudible = false;
-            // Auto-Stop after fade to free up Tone transport resources if needed
-            setTimeout(() => {
+            // Auto-Stop logic
+            if (this.stopTimeout) clearTimeout(this.stopTimeout);
+            this.stopTimeout = setTimeout(() => {
                 if (!this.isAudible && !this.isDisposed) {
                     this.stop();
                 }
-            }, rampTime * 1000 + 100);
+            }, rampTime * 1000 + 200);
         }
     }
 
-    /**
-     * Stop all layers
-     */
     public stop() {
         if (this.isDisposed) return;
         this.centorTone.stop();
@@ -98,20 +100,15 @@ export class NodePlayer {
         this.isAudible = false;
     }
 
-    /**
-     * Trigger the exit wash effect
-     */
     public triggerExit() {
         if (this.isDisposed) return;
         this.centorTone.triggerExitEffect();
     }
 
-    /**
-     * Clean up all resources
-     */
     public dispose() {
         if (this.isDisposed) return;
         this.isDisposed = true;
+
         this.centorTone.dispose();
         this.surroundingTones.dispose();
         this.effector.dispose();

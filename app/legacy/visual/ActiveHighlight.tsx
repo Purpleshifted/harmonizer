@@ -3,8 +3,8 @@
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { type NodeCandidate } from '../../shared/hooks/useSpatialDetection';
-import { getAdjacentNodes, getNodeWorldPosition } from '../../../../lib/tonnetz-grid';
+import { type NodeCandidate } from '../../components/walkthrough/shared/hooks/useSpatialDetection';
+import { getAdjacentNodes, getNodeWorldPosition } from '../../lib/tonnetz-grid';
 
 interface ActiveHighlightProps {
     mode: 'node' | 'edge' | 'face';

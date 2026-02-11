@@ -3,7 +3,7 @@
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { CAMERA_HEIGHT, type TriangleInfo } from '../../../../lib/tonnetz-grid';
+import { CAMERA_HEIGHT, type TriangleInfo } from '../../lib/tonnetz-grid';
 import {
     getTemperatureColor,
     NEUTRAL_COLOR,

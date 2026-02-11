@@ -15,11 +15,11 @@ import { usePlayerControls } from '../shared/hooks/usePlayerControls';
 import { DetectionResult } from '../shared/hooks/useSpatialDetection';
 
 // Legacy Visuals (Level 4: legacy/visual)
-import { InfiniteGridSystem } from '../legacy/visual/InfiniteGridSystem';
-import { GlowingGrid } from '../legacy/visual/GlowingGrid';
-import { FloatingSpheres } from '../legacy/visual/FloatingSpheres';
-import { ActiveHighlight } from '../legacy/visual/ActiveHighlight';
-import { NodeLabels } from '../legacy/visual/NodeLabels';
+import { InfiniteGridSystem } from '../../../legacy/visual/InfiniteGridSystem';
+import { GlowingGrid } from '../../../legacy/visual/GlowingGrid';
+import { FloatingSpheres } from '../../../legacy/visual/FloatingSpheres';
+import { ActiveHighlight } from '../../../legacy/visual/ActiveHighlight';
+import { NodeLabels } from '../../../legacy/visual/NodeLabels';
 
 // Shared audio
 import { AudioController } from '../shared/audio/AudioController';
@@ -90,20 +90,41 @@ export function AudioWalkthrough() {
         detectionRef.current = res;
     }, [handleLocationUpdate]);
 
+    // Preload samples on mount
+    React.useEffect(() => {
+        let mounted = true;
+
+        const loadAudioAssets = async () => {
+            setIsLoading(true);
+            try {
+                // Preload heavy assets
+                await Promise.all([preloadInstruments(), preloadReverbs()]);
+                if (mounted) {
+                    setAreSamplesLoaded(true);
+                    console.log('[AudioWalkthrough] All samples preloaded.');
+                }
+            } catch (err) {
+                console.error('Failed to preload audio assets:', err);
+            } finally {
+                if (mounted) setIsLoading(false);
+            }
+        };
+
+        loadAudioAssets();
+
+        return () => { mounted = false; };
+    }, []);
+
     const handleEnter = async () => {
-        if (isLoading) return;
-        setIsLoading(true);
+        if (!areSamplesLoaded) return; // Prevent entry if not loaded
 
         try {
+            // User gesture required strictly for AudioContext
             await Tone.start();
             console.log('Audio context started');
-            await Promise.all([preloadInstruments(), preloadReverbs()]);
-            setAreSamplesLoaded(true);
             setIsAudioReady(true);
         } catch (err) {
-            console.error('Failed to start audio:', err);
-        } finally {
-            setIsLoading(false);
+            console.error('Failed to start audio context:', err);
         }
     };
 

@@ -3,7 +3,7 @@
 import React, { useRef, useMemo, useEffect, useState, useCallback } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { getTone } from '../../../../lib/tonnetz';
+import { getTone } from '../../lib/tonnetz';
 import {
     getWorldToGrid,
     getNodeWorldPosition,
@@ -11,8 +11,8 @@ import {
     getNodeIndex,
     CAMERA_HEIGHT,
     SPACING,
-} from '../../../../lib/tonnetz-grid';
-import { useSpatialDetection, DetectionResult, InteractionMode, NodeCandidate } from '../../shared/hooks/useSpatialDetection';
+} from '../../lib/tonnetz-grid';
+import { useSpatialDetection, DetectionResult, InteractionMode, NodeCandidate } from '../../components/walkthrough/shared/hooks/useSpatialDetection';
 
 const VIEW_RADIUS = 20;
 const GRID_SIZE = VIEW_RADIUS * 2 + 1;

@@ -48,6 +48,10 @@ export class ArpeggiatorPlayer {
     private isDisposed = false;
     private currentEdgeKey = '';
 
+    public get active(): boolean {
+        return this.isPlaying;
+    }
+
     // Timing
     private readonly FADE_IN_TIME = 1.5;
 

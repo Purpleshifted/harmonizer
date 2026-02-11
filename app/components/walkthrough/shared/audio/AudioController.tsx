@@ -15,7 +15,6 @@ import { DetectionResult, NodeCandidate } from '../hooks/useSpatialDetection';
 import { useControls, folder } from 'leva';
 import { updateListener } from '../../../../lib/audio/core/SpatialAudio';
 import { AudioLogicCore, DetectionState } from '../../../../lib/audio/core/AudioLogicCore';
-import { AudioMixer } from '../../../../lib/audio/core/AudioMixer';
 
 interface AudioControllerProps {
     isAudioReady: boolean;
@@ -37,7 +36,6 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
 
     const lastModeRef = useRef<string | null>(null);
     const logicCoreRef = useRef<AudioLogicCore>(new AudioLogicCore());
-    const audioMixerRef = useRef<AudioMixer | null>(null);
 
     // === Throttling & Threshold Refs ===
     const lastListenerUpdateRef = useRef(0);
@@ -60,11 +58,11 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
             masterVol: { value: 1.0, min: 0, max: 1, label: 'Master Volume' },
         }),
         Layers: folder({
-            ambientVol: { value: 1.0, min: 0, max: 1, label: 'Ambient Drone' },
-            orchestraVol: { value: 1.0, min: 0, max: 1, label: 'Orchestra' },
+            ambientVol: { value: 0.5, min: 0, max: 1, label: 'Ambient Drone' },
+            orchestraVol: { value: 0.8, min: 0, max: 1, label: 'Orchestra' },
             arpVol: { value: 1.0, min: 0, max: 1, label: 'Arpeggiator' },
             padVol: { value: 1.0, min: 0, max: 1, label: 'Focus Pad' },
-            waveVol: { value: 1.0, min: 0, max: 1, label: 'Wave Effect' },
+            waveVol: { value: 0.2, min: 0, max: 1, label: 'Wave Effect' },
         })
     });
 
@@ -104,30 +102,39 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
     useEffect(() => {
         if (!isAudioReady) return;
 
-        // === 1. Initialize Mixer & Global Effects ===
-        const mixer = AudioMixer.getInstance();
-        audioMixerRef.current = mixer;
+        // Initialize Global Reverb Buses
+        // These are used as Send/Return buses (Wet = 1.0)
 
-        const reverbs = {
-            ambient: mixer.ambientReverb,
-            spatial: mixer.spatialReverb,
-            deep: mixer.deepReverb
-        };
+        const ambientRev = createReverb('ambient');
+        ambientRev.wet.value = 1.0;
+        ambientRev.toDestination();
+        ambientReverbRef.current = ambientRev;
 
-        ambientReverbRef.current = mixer.ambientReverb;
-        spatialReverbRef.current = mixer.spatialReverb;
-        deepReverbRef.current = mixer.deepReverb;
+        const spatialRev = createReverb('spatial');
+        spatialRev.wet.value = 1.0;
+        spatialRev.toDestination();
+        spatialReverbRef.current = spatialRev;
+
+        const deepRev = createReverb('deep');
+        deepRev.wet.value = 1.0;
+        deepRev.toDestination();
+        deepReverbRef.current = deepRev;
 
         console.log('[AudioController] Initializing audio players...');
-        globalPlayerRef.current = new GlobalPlayer(mixer.ambientReverb);
-        facePlayerRef.current = new FacePlayer(reverbs, mixer);
-        edgePlayerRef.current = new EdgePlayer(reverbs, mixer);
-        nodePlayerRef.current = new NodePlayer(reverbs, mixer);
+        globalPlayerRef.current = new GlobalPlayer(ambientRev);
+        facePlayerRef.current = new FacePlayer(spatialRev, deepRev);
+        edgePlayerRef.current = new EdgePlayer(spatialRev, deepRev);
+        nodePlayerRef.current = new NodePlayer(deepRev);
 
         globalPlayerRef.current.start();
 
         // Immediate volume apply for fresh instances
         globalPlayerRef.current.setVolumes(ambientVol, waveVol);
+
+        // Ensure Transport is started for Arpeggiator and LFOs
+        if (Tone.getTransport().state !== 'started') {
+            Tone.getTransport().start();
+        }
 
         return () => {
             console.log('[AudioController] Disposing audio players...');
@@ -135,13 +142,13 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
             facePlayerRef.current?.dispose();
             edgePlayerRef.current?.dispose();
             nodePlayerRef.current?.dispose();
-            mixer.dispose(); // Cleanup global mixer
+
+            // Dispose Reverbs
+            ambientReverbRef.current?.dispose();
+            spatialReverbRef.current?.dispose();
+            deepReverbRef.current?.dispose();
         };
     }, [isAudioReady]);
-    // ambientVol and waveVol are needed for the immediate volume apply.
-
-    // For throttled controller logs
-    const lastControllerLog = useRef(0);
 
     useFrame((_, delta) => {
         // Read directly from ref (High frequency, no re-render needed)
@@ -166,12 +173,6 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
 
         const audioState = logicCoreRef.current.processDetection(detectionState);
         const { modeChanged, structureChanged, mix, events } = audioState;
-
-        const nowTs = performance.now();
-        if (nowTs - lastControllerLog.current > 3000) {
-            lastControllerLog.current = nowTs;
-            console.log(`[AudioController] Loop: Mode=${currentMode}, Notes=${detectionState.activeNotes.length}, FocusVol=${mix.focusVolume.toFixed(3)}, structureChanged=${structureChanged}`);
-        }
 
         // === 0. Centralized Audio Update (Throttled + Movement Threshold) ===
         const now = performance.now();
@@ -199,38 +200,48 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
         // 0.3 Mode-specific position updates are now handled inside ModePlayers
 
         // 2. Target Volumes Calculation (Crossfading)
-        const FADE_TIME = 1.0;
-        const volFace = currentMode === 'face' ? 1.0 : 0.25;
+        const FADE_TIME = 2.0; // Smoother transitions
+        const volFace = currentMode === 'face' ? 1.0 : 0.0;
         const volEdge = currentMode === 'edge' ? 1.0 : 0.0;
-        const volNode = currentMode === 'node' ? 1.0 : 0.0;
+        const volNode = currentMode === 'node' ? 1.0 : 0.2;
 
         // 3. Update Players Data & Volume
 
         // === 0.3 Update Mode-Specific Players ===
-        // Note: setVolume is called BEFORE update to ensure isAudible state is correct for the first trigger
         if (facePlayerRef.current) {
-            facePlayerRef.current.setVolume(mix.chordVolume * orchestraVol, (currentMode === 'face' ? 1.0 : 0.25) * orchestraVol, modeChanged ? FADE_TIME : 0.2);
             facePlayerRef.current.update(detection, structureChanged, orchestraVol);
+            if (modeChanged) {
+                facePlayerRef.current.setVolume(mix.chordVolume * orchestraVol, (currentMode === 'face' ? 1.0 : 0.25) * orchestraVol, FADE_TIME);
+            }
         }
 
         if (edgePlayerRef.current) {
-            edgePlayerRef.current.setVolume(mix.arpVolume * arpVol, modeChanged ? FADE_TIME : 0.2);
             edgePlayerRef.current.update(detection, structureChanged, arpVol);
+            if (modeChanged) {
+                edgePlayerRef.current.setVolume(mix.arpVolume * arpVol, FADE_TIME);
+            }
         }
 
         if (nodePlayerRef.current) {
-            nodePlayerRef.current.setVolume(mix.focusVolume * padVol, modeChanged ? FADE_TIME : 0.2);
             nodePlayerRef.current.update(detection, structureChanged, padVol);
+            if (modeChanged) {
+                nodePlayerRef.current.setVolume(mix.focusVolume * padVol, FADE_TIME);
+            }
         }
 
         // === 0.4 Process Transition Events ===
+        // === 0.4 Process Transition Events (Clean Signalling) ===
         events.forEach(event => {
-            if (event.type === 'EXIT_NODE' && nodePlayerRef.current) {
-                console.log('[AudioController] EXIT_NODE event received');
-                nodePlayerRef.current.triggerExit();
-            }
-            if (event.type.startsWith('ENTER_')) {
-                console.log(`[AudioController] Transition: ${event.type}`);
+            switch (event.type) {
+                case 'EXIT_NODE':
+                    nodePlayerRef.current?.triggerExit();
+                    break;
+                case 'EXIT_EDGE':
+                    edgePlayerRef.current?.triggerExit();
+                    break;
+                case 'EXIT_FACE':
+                    facePlayerRef.current?.triggerExit();
+                    break;
             }
         });
 

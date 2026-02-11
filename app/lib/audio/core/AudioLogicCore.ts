@@ -35,11 +35,7 @@ export interface AudioState {
     events: AudioEvent[];
 }
 
-export type AudioEventType =
-    | 'ENTER_FACE' | 'EXIT_FACE'
-    | 'ENTER_EDGE' | 'EXIT_EDGE'
-    | 'ENTER_NODE' | 'EXIT_NODE'
-    | 'STRUCTURE_CHANGE';
+export type AudioEventType = 'EXIT_NODE' | 'EXIT_EDGE' | 'EXIT_FACE' | 'ENTER_MODE' | 'STRUCTURE_CHANGE';
 
 export interface AudioEvent {
     type: AudioEventType;
@@ -67,16 +63,15 @@ export class AudioLogicCore {
         // 2. Generate Events
         const events: AudioEvent[] = [];
         if (modeChanged) {
-            // Symmetry: Push Exit event for old mode and Enter event for new mode
-            if (previousMode) {
-                const exitType = `EXIT_${previousMode.toUpperCase()}` as AudioEventType;
-                events.push({ type: exitType, payload: { nextMode: mode } });
+            if (previousMode === 'node') {
+                events.push({ type: 'EXIT_NODE', payload: { nextMode: mode } });
+            } else if (previousMode === 'edge') {
+                events.push({ type: 'EXIT_EDGE', payload: { nextMode: mode } });
+            } else if (previousMode === 'face') {
+                events.push({ type: 'EXIT_FACE', payload: { nextMode: mode } });
             }
-
-            const enterType = `ENTER_${mode.toUpperCase()}` as AudioEventType;
-            events.push({ type: enterType, payload: { previousMode } });
+            events.push({ type: 'ENTER_MODE', payload: { mode, previousMode } });
         }
-
         if (structureChanged && !modeChanged) {
             events.push({ type: 'STRUCTURE_CHANGE', payload: { notes: activeNotes } });
         }

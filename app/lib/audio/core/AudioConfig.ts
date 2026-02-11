@@ -39,12 +39,12 @@ export const AudioConfig = {
             deepSend: 0.2
         },
         arp: {
-            volume: -4, // dB equivalent of old 0.6 linear
+            volume: -2, // Boosted for clarity
             spatialSend: 0.4,
             deepSend: 0.1
         },
         focus: {
-            volume: -10, // dB
+            volume: -4, // Boosted to match Astral Pad intensity
             deepSend: 0.5
         },
         wave: {
