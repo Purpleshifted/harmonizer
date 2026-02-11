@@ -19,7 +19,7 @@ import { VisualElements } from '../visual/components/VisualElements';
 
 // Audio
 import { AudioController } from '../shared/audio/AudioController';
-import { preloadInstruments } from '../../../lib/audio/core/InstrumentFactory';
+import { preloadInstruments } from '../../../lib/audio/face/factory/InstrumentFactory';
 import { preloadReverbs } from '../../../lib/audio/core/ReverbFactory';
 
 interface UnifiedSceneLogicProps {

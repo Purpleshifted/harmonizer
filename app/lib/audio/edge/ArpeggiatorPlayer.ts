@@ -9,9 +9,9 @@
 
 import * as Tone from 'tone';
 import * as THREE from 'three';
-import { ensureOctave } from './core/NoteUtils';
-import { createSpatialPanner, updatePannerPosition } from './core/SpatialAudio';
-import { createReverb, createDelay } from './core/ReverbFactory';
+import { ensureOctave } from '../core/NoteUtils';
+import { createSpatialPanner, updatePannerPosition } from '../core/SpatialAudio';
+import { createReverb, createDelay } from '../core/ReverbFactory';
 
 interface IndependentVoice {
     synth: Tone.Synth;  // Monophonic synth for each voice (no PolySynth overhead)
@@ -275,6 +275,17 @@ export class ArpeggiatorPlayer {
                 updatePannerPosition(this.voices[idx].panner, pos, 0.1);
             }
         });
+    }
+
+    public stop() {
+        if (!this.isPlaying || this.isDisposed) return;
+        const now = Tone.now();
+        this.voices.forEach(v => {
+            v.gain.gain.rampTo(0, 0.5, now);
+            v.sequence.events = [];
+        });
+        this.currentEdgeKey = '';
+        this.isPlaying = false;
     }
 
     dispose() {

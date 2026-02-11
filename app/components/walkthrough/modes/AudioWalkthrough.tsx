@@ -23,7 +23,7 @@ import { NodeLabels } from '../legacy/visual/NodeLabels';
 
 // Shared audio
 import { AudioController } from '../shared/audio/AudioController';
-import { preloadInstruments } from '../../../lib/audio/core/InstrumentFactory';
+import { preloadInstruments } from '../../../lib/audio/face/factory/InstrumentFactory';
 import { preloadReverbs } from '../../../lib/audio/core/ReverbFactory';
 
 // Utilities

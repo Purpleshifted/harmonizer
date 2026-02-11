@@ -7,14 +7,14 @@ import * as THREE from 'three';
 import * as Tone from 'tone';
 import { createReverb } from '../../../../lib/audio/core/ReverbFactory';
 
-import { AmbientDrone } from '../../../../lib/audio/AmbientDrone';
-import { ChordPlayer } from '../../../../lib/audio/ChordPlayer';
-import { ArpeggiatorPlayer } from '../../../../lib/audio/ArpeggiatorPlayer';
-import { NodeFocusPad } from '../../../../lib/audio/NodeFocusPad';
-import { WaveEffect } from '../../../../lib/audio/WaveEffect';
+import { GlobalPlayer } from '../../../../lib/audio/player/GlobalPlayer';
+import { FacePlayer } from '../../../../lib/audio/player/FacePlayer';
+import { EdgePlayer } from '../../../../lib/audio/player/EdgePlayer';
+import { NodePlayer } from '../../../../lib/audio/player/NodePlayer';
 import { DetectionResult, NodeCandidate } from '../hooks/useSpatialDetection';
 import { useControls, folder } from 'leva';
 import { updateListener } from '../../../../lib/audio/core/SpatialAudio';
+import { AudioLogicCore, DetectionState } from '../../../../lib/audio/core/AudioLogicCore';
 
 interface AudioControllerProps {
     isAudioReady: boolean;
@@ -29,14 +29,13 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
     const spatialReverbRef = useRef<Tone.Reverb | null>(null);
     const deepReverbRef = useRef<Tone.Reverb | null>(null);
 
-    const ambientDroneRef = useRef<AmbientDrone | null>(null);
-    const chordPlayerRef = useRef<ChordPlayer | null>(null);
-    const arpeggiatorRef = useRef<ArpeggiatorPlayer | null>(null);
-    const focusPadRef = useRef<NodeFocusPad | null>(null);
-    const waveEffectRef = useRef<WaveEffect | null>(null);
+    const globalPlayerRef = useRef<GlobalPlayer | null>(null);
+    const facePlayerRef = useRef<FacePlayer | null>(null);
+    const edgePlayerRef = useRef<EdgePlayer | null>(null);
+    const nodePlayerRef = useRef<NodePlayer | null>(null);
 
     const lastModeRef = useRef<string | null>(null);
-    const prevAudioStructureRef = useRef({ mode: '', nodeNames: '' });
+    const logicCoreRef = useRef<AudioLogicCore>(new AudioLogicCore());
 
     // === Throttling & Threshold Refs ===
     const lastListenerUpdateRef = useRef(0);
@@ -74,43 +73,30 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
 
     // Reactive Layer Volume Updates
     useEffect(() => {
-        if (ambientDroneRef.current) {
-            // AmbientDrone needs a setVolume method or we access gain directly if public
-            // Currently it has setFocus/ClearFocus but not global volume scaler exposed cleanly?
-            // checking AmbientDrone... it has masterGain but private.
-            // For now, let's assume we might need to add setVolume to AmbientDrone or just re-trigger focus.
-            // Actually AmbientDrone has no setGlobalVolume. I should add it.
+        console.log(`[AudioController] Applying volumes (isReady: ${isAudioReady}):`, { ambientVol, orchestraVol, arpVol, padVol, waveVol });
+
+        if (globalPlayerRef.current) {
+            globalPlayerRef.current.setVolumes(ambientVol, waveVol);
         }
 
-        if (chordPlayerRef.current) {
-            // ChordPlayer has setGlobalVolume.
-            // We need to know current multiplier (based on mode). 
-            // This is tricky without state.
-            // Ideally modifying the players to accept a "Mixer Volume" separate from "Fade Volume".
-            // For now, let's just re-apply the current mode's volume * Leva volume.
-            const currentMode = lastModeRef.current;
+        if (facePlayerRef.current) {
+            const currentMode = lastModeRef.current || 'face';
             const volFace = currentMode === 'face' ? 1.0 : 0.25;
-            chordPlayerRef.current.setGlobalVolume(1.0 * orchestraVol, 0.1);
-            chordPlayerRef.current.setBackgroundVolume(volFace * orchestraVol, 0.1);
+            facePlayerRef.current.setVolume(1.0 * orchestraVol, volFace * orchestraVol, 0.1);
         }
 
-        if (arpeggiatorRef.current) {
+        if (edgePlayerRef.current) {
             const currentMode = lastModeRef.current;
             const volEdge = currentMode === 'edge' ? 1.0 : 0.0;
-            arpeggiatorRef.current.setGlobalVolume(volEdge * arpVol, 0.1);
+            edgePlayerRef.current.setVolume(volEdge * arpVol, 0.1);
         }
 
-        if (focusPadRef.current) {
+        if (nodePlayerRef.current) {
             const currentMode = lastModeRef.current;
             const volNode = currentMode === 'node' ? 1.0 : 0.0;
-            focusPadRef.current.setGlobalVolume(volNode * padVol, 0.1);
+            nodePlayerRef.current.setVolume(volNode * padVol, 0.1);
         }
-
-        if (waveEffectRef.current) {
-            // WaveEffect has internal gain logic. I might need to add setVolume.
-        }
-
-    }, [ambientVol, orchestraVol, arpVol, padVol, waveVol]);
+    }, [isAudioReady, ambientVol, orchestraVol, arpVol, padVol, waveVol]);
 
     // Initialize audio players
     useEffect(() => {
@@ -134,23 +120,23 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
         deepRev.toDestination();
         deepReverbRef.current = deepRev;
 
-        // Initialize Players with Shared Reverbs
-        ambientDroneRef.current = new AmbientDrone(ambientRev);
-        chordPlayerRef.current = new ChordPlayer(spatialRev, deepRev);
-        arpeggiatorRef.current = new ArpeggiatorPlayer(spatialRev, deepRev);
-        focusPadRef.current = new NodeFocusPad(deepRev);
+        console.log('[AudioController] Initializing audio players...');
+        globalPlayerRef.current = new GlobalPlayer(ambientRev);
+        facePlayerRef.current = new FacePlayer(spatialRev, deepRev);
+        edgePlayerRef.current = new EdgePlayer(spatialRev, deepRev);
+        nodePlayerRef.current = new NodePlayer(deepRev);
 
-        waveEffectRef.current = new WaveEffect(); // WaveEffect manages its own internal reverb (for now, or refactor later)
+        globalPlayerRef.current.start();
 
-        ambientDroneRef.current.start();
-        waveEffectRef.current.start(); // Wave effect runs in background/idle
+        // Immediate volume apply for fresh instances
+        globalPlayerRef.current.setVolumes(ambientVol, waveVol);
 
         return () => {
-            ambientDroneRef.current?.dispose();
-            chordPlayerRef.current?.dispose();
-            arpeggiatorRef.current?.dispose();
-            focusPadRef.current?.dispose();
-            waveEffectRef.current?.dispose();
+            console.log('[AudioController] Disposing audio players...');
+            globalPlayerRef.current?.dispose();
+            facePlayerRef.current?.dispose();
+            edgePlayerRef.current?.dispose();
+            nodePlayerRef.current?.dispose();
 
             // Dispose Reverbs
             ambientReverbRef.current?.dispose();
@@ -166,17 +152,22 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
         if (!isAudioReady || !detection) return;
 
         const currentMode = detection.mode;
-        const lastMode = lastModeRef.current;
-        const modeChanged = lastMode !== currentMode;
+        // const lastMode = lastModeRef.current; // Removed duplicate
+        // const modeChanged = lastMode !== currentMode; // Removed duplicate
 
-        // Internal structure change detection (More robust than relying on the hook's single-frame flag)
-        const currentNodeNames = detection.activeNodes.map(n => n.note.name).sort().join('-');
-        const structureChanged = currentMode !== prevAudioStructureRef.current.mode ||
-            currentNodeNames !== prevAudioStructureRef.current.nodeNames;
+        // === 1. Prepare Logic State ===
+        const detectionState: DetectionState = {
+            mode: detection.mode,
+            activeNotes: detection.activeNodes.map(n => n.note.name),
+            centerPos: detection.centerPos || new THREE.Vector3(),
+            distanceToCenter: detection.activeNodes[0]?.distance || 0,
+            isMajor: detection.activeTriangle?.isMajor,
+            nearbyNotes: detection.nearestNeighbors.map(n => n.note.name),
+            nearbyPositions: detection.nearestNeighbors.map(n => n.pos)
+        };
 
-        if (structureChanged) {
-            prevAudioStructureRef.current = { mode: currentMode, nodeNames: currentNodeNames };
-        }
+        const audioState = logicCoreRef.current.processDetection(detectionState);
+        const { modeChanged, structureChanged, mix, events } = audioState;
 
         // === 0. Centralized Audio Update (Throttled + Movement Threshold) ===
         const now = performance.now();
@@ -199,29 +190,9 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
             const forward = currentForward; // Reuse the calculated direction
             updateListener(listenerPos, forward);
 
-            // 0.2 Update Ambient Drone
-            if (ambientDroneRef.current) {
-                const mapToAudioNode = (n: NodeCandidate) => ({
-                    name: n.note.name,
-                    value: n.note.value,
-                    position: n.pos,
-                    distance: n.distance
-                });
-
-                ambientDroneRef.current.updateNotes(detection.nearestFourNotes.map(mapToAudioNode));
-
-                if (currentMode === 'node' && detection.activeNodes.length > 0) {
-                    ambientDroneRef.current.focusOnNote(detection.activeNodes[0].note.name, 0.6);
-                } else {
-                    ambientDroneRef.current.clearFocus();
-                }
-            }
-
-            // 0.3 Update Active Player Positions (for panner smoothness)
-            if (chordPlayerRef.current && detection.activeTriangle) {
-                chordPlayerRef.current.updatePositions(detection.activeTriangle.positions);
-            }
         }
+
+        // 0.3 Mode-specific position updates are now handled inside ModePlayers
 
         // 2. Target Volumes Calculation (Crossfading)
         const FADE_TIME = 1.0;
@@ -231,85 +202,55 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
 
         // 3. Update Players Data & Volume
 
-        // === Face/Orchestra Player ===
-        if (chordPlayerRef.current) {
-            if (detection.activeTriangle && structureChanged) {
-                chordPlayerRef.current.playChord(detection.activeTriangle.notes, detection.activeTriangle.positions, detection.activeTriangle.isMajor);
-            }
-
-            if (structureChanged) {
-                let hornNotes: string[] = [];
-                let hornPositions: THREE.Vector3[] = [];
-
-                if (currentMode === 'node' && detection.activeNodes.length > 0) {
-                    hornNotes = [detection.activeNodes[0].note.name];
-                    hornPositions = [detection.activeNodes[0].pos];
-                } else if (currentMode === 'edge' && detection.activeEdge) {
-                    const { note1, note2, pos1, pos2 } = detection.activeEdge;
-                    hornNotes = [note1.name, note2.name];
-                    hornPositions = [pos1, pos2];
-                } else if (currentMode === 'face' && detection.activeTriangle) {
-                    hornNotes = detection.activeTriangle.notes;
-                    hornPositions = detection.activeTriangle.positions;
-                }
-                chordPlayerRef.current.updateActiveHorns(hornNotes, hornPositions);
-            }
-
+        // === 0.3 Update Mode-Specific Players ===
+        if (facePlayerRef.current) {
+            facePlayerRef.current.update(detection, structureChanged, orchestraVol);
             if (modeChanged) {
-                const volFace = currentMode === 'face' ? 1.0 : 0.25;
-                // Apply Leva volume modifier
-                chordPlayerRef.current.setGlobalVolume(1.0 * orchestraVol, 0.1);
-                chordPlayerRef.current.setBackgroundVolume(volFace * orchestraVol, 1.0);
+                facePlayerRef.current.setVolume(mix.chordVolume * orchestraVol, (currentMode === 'face' ? 1.0 : 0.25) * orchestraVol, FADE_TIME);
+            }
+        }
+
+        if (edgePlayerRef.current) {
+            edgePlayerRef.current.update(detection, structureChanged, arpVol);
+            if (modeChanged) {
+                edgePlayerRef.current.setVolume(mix.arpVolume * arpVol, FADE_TIME);
+            }
+        }
+
+        if (nodePlayerRef.current) {
+            nodePlayerRef.current.update(detection, structureChanged, padVol);
+            if (modeChanged) {
+                nodePlayerRef.current.setVolume(mix.focusVolume * padVol, FADE_TIME);
+            }
+        }
+
+        // === 0.4 Process Transition Events ===
+        events.forEach(event => {
+            if (event.type === 'EXIT_NODE' && nodePlayerRef.current) {
+                nodePlayerRef.current.triggerExit();
+            }
+        });
+
+        // === Global Player Frame Update (Ambient + Wave) ===
+        if (globalPlayerRef.current) {
+            const mapToAudioNode = (n: NodeCandidate) => ({
+                name: n.note.name,
+                value: n.note.value,
+                position: n.pos,
+                distance: n.distance
+            });
+
+            // Apply dynamic volume from Logic Core (multiplied by Master Layer Sliders)
+            globalPlayerRef.current.setVolumes(mix.droneVolume * ambientVol, mix.waveVolume * waveVol);
+
+            // We pass delta (seconds) every frame for smooth rotation/timing
+            globalPlayerRef.current.update(delta, detection.centerPos || new THREE.Vector3(), detection.nearestFourNotes.map(mapToAudioNode));
+
+            // Note focus changes are logic-heavy, we can keep them here or throttle
+            if (currentMode === 'node' && detection.activeNodes.length > 0) {
+                globalPlayerRef.current.focusOnNode(detection.activeNodes[0].note.name, 0.6);
             } else {
-                // Determine if we need to update volume due to Leva change (Simpler: just update every frame? No, too heavy)
-                // Better: React to Leva change in a separate useEffect? 
-                // Creating a specific effect for volume updates helps.
-            }
-        }
-
-        // === Edge Player (Arpeggiator) ===
-        if (arpeggiatorRef.current) {
-            if (detection.activeEdge && structureChanged) {
-                const { note1, note2, pos1, pos2, distance1, distance2, midpoint } = detection.activeEdge;
-                arpeggiatorRef.current.startArpeggio(
-                    note1.name,
-                    note2.name,
-                    pos1,
-                    pos2,
-                    distance1,
-                    distance2,
-                    midpoint,
-                    detection.nearestNeighbors.map(n => n.note.name),
-                    detection.nearestNeighbors.map(n => n.pos)
-                );
-            }
-            if (modeChanged) {
-                arpeggiatorRef.current.setGlobalVolume(volEdge * arpVol, FADE_TIME);
-            }
-        }
-
-        // === Node Player (NodeFocusPad) ===
-        if (focusPadRef.current) {
-            if (detection.mode === 'node' && detection.activeNodes.length > 0 && structureChanged) {
-                focusPadRef.current.start(detection.activeNodes[0].note.name);
-            }
-            if (modeChanged) {
-                focusPadRef.current.setGlobalVolume(volNode * padVol, FADE_TIME);
-
-                // Trigger exit noise if leaving node mode
-                if (lastMode === 'node' && currentMode !== 'node') {
-                    focusPadRef.current.triggerExitEffect();
-                }
-            }
-        }
-
-        // === Wave Effect ===
-        if (waveEffectRef.current) {
-            waveEffectRef.current.update(delta, detection.centerPos || new THREE.Vector3());
-
-            if (modeChanged && lastMode === 'node' && currentMode !== 'node') {
-                const isMajor = currentMode === 'face' ? detection.activeTriangle?.isMajor : undefined;
-                waveEffectRef.current.triggerTransition(currentMode as 'face' | 'edge', isMajor);
+                globalPlayerRef.current.clearFocus();
             }
         }
 

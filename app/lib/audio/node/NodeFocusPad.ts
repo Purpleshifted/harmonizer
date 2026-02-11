@@ -5,8 +5,8 @@
  */
 
 import * as Tone from 'tone';
-import { ensureOctave, transposeSemitones } from './core/NoteUtils';
-import { createReverb } from './core/ReverbFactory';
+import { ensureOctave, transposeSemitones } from '../core/NoteUtils';
+import { createReverb } from '../core/ReverbFactory';
 
 export class NodeFocusPad {
     private synth: Tone.PolySynth;

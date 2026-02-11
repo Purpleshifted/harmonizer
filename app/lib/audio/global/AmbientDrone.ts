@@ -6,9 +6,9 @@
 
 import * as Tone from 'tone';
 import * as THREE from 'three';
-import { noteToFreq, ensureOctave } from './core/NoteUtils';
-import { createSpatialPanner, updatePannerPosition, updateListener } from './core/SpatialAudio';
-import { createReverb } from './core/ReverbFactory';
+import { noteToFreq, ensureOctave } from '../core/NoteUtils';
+import { createSpatialPanner, updatePannerPosition, updateListener } from '../core/SpatialAudio';
+import { createReverb } from '../core/ReverbFactory';
 
 interface NoteVoice {
     oscillator: Tone.Oscillator;
@@ -131,6 +131,14 @@ export class AmbientDrone {
     }
 
     /**
+     * Set global volume of the drone layer
+     */
+    setVolume(volume: number, rampTime: number = 0.5) {
+        if (this.isDisposed) return;
+        this.masterGain.gain.rampTo(volume, rampTime);
+    }
+
+    /**
      * Start all voices (call after audio context is ready)
      */
     start() {
@@ -151,10 +159,11 @@ export class AmbientDrone {
     stop() {
         if (this.isDisposed) return;
 
-        const now = Tone.now();
         this.voices.forEach((voice) => {
-            voice.gain.gain.rampTo(0, 0.5, now);
+            voice.oscillator.stop();
+            voice.isPlaying = false;
         });
+        this.isStarted = false;
     }
 
     /**
