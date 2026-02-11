@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import TonnetzWalkthrough from '../../../components/walkthrough/modes/unified/TonnetzWalkthrough';
+import { UnifiedWalkthrough } from '../../../components/walkthrough/modes/UnifiedWalkthrough';
 
 export default function UnifiedModePage() {
-    return <TonnetzWalkthrough />;
+    return <UnifiedWalkthrough />;
 }
