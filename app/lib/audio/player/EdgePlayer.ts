@@ -7,8 +7,8 @@ export class EdgePlayer {
     private isAudible = false;
     private isDisposed = false;
 
-    constructor(spatialReverb: Tone.Reverb, deepReverb: Tone.Reverb) {
-        this.arpeggiator = new ArpeggiatorPlayer(spatialReverb, deepReverb);
+    constructor(reverbs: any, _mixer: any) {
+        this.arpeggiator = new ArpeggiatorPlayer(reverbs.spatial, reverbs.deep);
     }
 
     public update(detection: any, structureChanged: boolean, arpVol: number) {

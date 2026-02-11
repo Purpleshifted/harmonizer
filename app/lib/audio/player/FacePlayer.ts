@@ -40,8 +40,10 @@ export class FacePlayer {
     private reTriggerIntervalId: ReturnType<typeof setInterval> | null = null;
     readonly RE_TRIGGER_INTERVAL = 6000;
 
-    constructor(spatialReverb: Tone.Reverb, deepReverb: Tone.Reverb) {
-        this.masterGain = new Tone.Gain(0).toDestination();
+    constructor(reverbs: any, mixer: any) {
+        // Connect to mixer instead of direct toDestination
+        this.masterGain = new Tone.Gain(0);
+        this.masterGain.connect(mixer.masterBus);
 
         // Vibratos
         this.vibratoSpatial = new Tone.Vibrato({ frequency: 3, depth: 0.08, type: 'sine' });
@@ -49,17 +51,17 @@ export class FacePlayer {
 
         // Routing Chains
         this.spatialDry = new Tone.Gain(0.6).connect(this.masterGain);
-        this.spatialSend = new Tone.Gain(0.4).connect(spatialReverb);
+        this.spatialSend = new Tone.Gain(0.4).connect(reverbs.spatial);
         this.vibratoSpatial.connect(this.spatialDry);
         this.vibratoSpatial.connect(this.spatialSend);
 
         this.centerDry = new Tone.Gain(0.2).connect(this.masterGain);
-        this.centerSend = new Tone.Gain(0.8).connect(deepReverb);
+        this.centerSend = new Tone.Gain(0.8).connect(reverbs.deep);
         this.vibratoDeep.connect(this.centerDry);
         this.vibratoDeep.connect(this.centerSend);
 
         this.astralDry = new Tone.Gain(0.2).connect(this.masterGain);
-        this.astralSend = new Tone.Gain(0.8).connect(deepReverb);
+        this.astralSend = new Tone.Gain(0.8).connect(reverbs.deep);
 
         // Instantiate Layers from face/layers/
         this.baseLayer = new BaseLayer(this.vibratoSpatial);

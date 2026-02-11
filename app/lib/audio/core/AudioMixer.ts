@@ -22,6 +22,11 @@ export class AudioMixer {
     // Aux Buses (Effects)
     private buses: Map<BusName, MixerBus> = new Map();
 
+    // Direct Access for convenience
+    public ambientReverb!: Tone.Reverb;
+    public spatialReverb!: Tone.Reverb;
+    public deepReverb!: Tone.Reverb;
+
     // Effects Storage (to dispose later)
     private effects: Tone.ToneAudioNode[] = [];
 
@@ -33,9 +38,13 @@ export class AudioMixer {
         this.registerBus('master', this.masterBus);
 
         // 2. Create Common Aux Buses
-        this.createAuxBus('reverb-ambient', createReverb('ambient'));
-        this.createAuxBus('reverb-spatial', createReverb('spatial'));
-        this.createAuxBus('reverb-deep', createReverb('deep'));
+        this.ambientReverb = createReverb('ambient');
+        this.spatialReverb = createReverb('spatial');
+        this.deepReverb = createReverb('deep');
+
+        this.createAuxBus('reverb-ambient', this.ambientReverb);
+        this.createAuxBus('reverb-spatial', this.spatialReverb);
+        this.createAuxBus('reverb-deep', this.deepReverb);
         this.createAuxBus('delay', createDelay('8n.', 0.3, 0.5));
     }
 
@@ -92,6 +101,7 @@ export class AudioMixer {
         this.effects.forEach(e => e.dispose());
         this.buses.clear();
         this.effects = [];
-        // Tone.context is global, usually we don't dispose it, just stop it.
+        // Important: Clear singleton instance on disposal
+        (AudioMixer as any).instance = undefined;
     }
 }
