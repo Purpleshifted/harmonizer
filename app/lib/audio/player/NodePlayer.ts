@@ -9,8 +9,10 @@ import { Effector } from '../node/engine/Effectors';
 import { CentorTone } from '../node/layers/CentorTone';
 import { SurroundingTones } from '../node/layers/SurroundingTones';
 import { AudioConfig } from '../core/AudioConfig';
+import { AudioPorts, MatrixPlayer } from '../core/Buses';
 
-export class NodePlayer {
+export class NodePlayer implements MatrixPlayer {
+    public readonly ports: AudioPorts;
     private effector: Effector;
     private centorTone: CentorTone;
     private surroundingTones: SurroundingTones;
@@ -19,9 +21,10 @@ export class NodePlayer {
     private isDisposed = false;
     private stopTimeout: NodeJS.Timeout | null = null;
 
-    constructor(deepReverb: Tone.Reverb) {
+    constructor() {
         // 1. Central Engine (Effects & Routing)
-        this.effector = new Effector(deepReverb);
+        this.effector = new Effector();
+        this.ports = this.effector.ports;
 
         // 2. Layers
         this.centorTone = new CentorTone();
@@ -35,7 +38,7 @@ export class NodePlayer {
     /**
      * Update loop to handle musical changes based on detection
      */
-    public update(detection: any, structureChanged: boolean, _padVol: number) {
+    public update(detection: any, structureChanged: boolean, _padVol: number, time: number) {
         if (this.isDisposed || !this.isAudible) return;
 
         // 1. Central Pad Logic
@@ -44,12 +47,12 @@ export class NodePlayer {
 
             // Robust Triggering: Trigger if structure changed OR if it should be playing but isn't
             if (structureChanged || !this.centorTone.active) {
-                this.centorTone.start(currentNode);
+                this.centorTone.start(currentNode, time);
             }
         } else {
             // Stop if not in node mode or no active nodes
             if (this.centorTone.active) {
-                this.centorTone.stop();
+                this.centorTone.stop(time);
             }
         }
 
@@ -60,19 +63,19 @@ export class NodePlayer {
 
             // Update candidates pool for random sparkles
             this.surroundingTones.updateCandidates(surroundingNotes, surroundingPos);
-            this.surroundingTones.start();
+            this.surroundingTones.start(); // Sequences handle internal timing
         } else {
             this.surroundingTones.stop();
         }
     }
 
-    public setVolume(volume: number, rampTime: number = 0.1) {
+    public setVolume(volume: number, rampTime: number = 0.1, time: number) {
         if (this.isDisposed) return;
         const profile = AudioConfig.transitions.node;
 
         // Apply specific NODE master transition time (focus) if fading out
         const effectiveRamp = volume < 0.01 ? profile.master : rampTime;
-        this.effector.setOutputVolume(volume, effectiveRamp);
+        this.effector.setOutputVolume(volume, effectiveRamp, time);
 
         if (volume > 0.001) {
             this.isAudible = true;
@@ -98,14 +101,15 @@ export class NodePlayer {
 
     public stop() {
         if (this.isDisposed) return;
-        this.centorTone.stop();
+        const now = Tone.now();
+        this.centorTone.stop(now);
         this.surroundingTones.stop();
         this.isAudible = false;
     }
 
-    public triggerExit() {
+    public triggerExit(time: number) {
         if (this.isDisposed) return;
-        this.centorTone.triggerExitEffect();
+        this.centorTone.triggerExitEffect(time);
     }
 
     public dispose() {

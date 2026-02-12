@@ -5,22 +5,20 @@
 
 import * as Tone from 'tone';
 import { AudioConfig } from '../../core/AudioConfig';
+import { AudioPorts, MatrixPlayer } from '../../core/Buses';
 
-export class Effector {
+export class Effector implements MatrixPlayer {
+    public readonly ports: AudioPorts;
     public readonly filter: Tone.Filter;
     public readonly directInput: Tone.Gain; // Bypasses filter, goes to volume (for bells)
 
     private lfo: Tone.LFO;
     private volume: Tone.Volume;
-    private deepReverb: Tone.Reverb;
     private dryGain: Tone.Gain;
     private sendGain: Tone.Gain;
     private isDisposed = false;
 
-    constructor(sharedDeepReverb: Tone.Reverb) {
-        // Shared Deep Reverb
-        this.deepReverb = sharedDeepReverb;
-
+    constructor() {
         // 1. Wobble Filter (Main Input)
         this.filter = new Tone.Filter({
             type: 'lowpass',
@@ -42,8 +40,13 @@ export class Effector {
 
         // 3. Output Split (Dry / Wet) - Linked to AudioConfig
         const deepSend = AudioConfig.mix.focus.deepSend;
-        this.dryGain = new Tone.Gain(1 - deepSend).toDestination();
-        this.sendGain = new Tone.Gain(deepSend).connect(this.deepReverb);
+        this.dryGain = new Tone.Gain(1 - deepSend);
+        this.sendGain = new Tone.Gain(deepSend);
+
+        this.ports = {
+            main: this.dryGain,
+            deep: this.sendGain
+        };
 
         // Direct Input (Bypass Filter) -> Volume
         this.directInput = new Tone.Gain(1.0);
@@ -63,12 +66,12 @@ export class Effector {
     /**
      * Set the master output volume (linear 0-1)
      */
-    public setOutputVolume(volume: number, rampTime: number = 0.1) {
+    public setOutputVolume(volume: number, rampTime: number = 0.1, time: number) {
         if (this.isDisposed) return;
 
         // Convert linear to dB
         const targetDb = volume < 0.01 ? -60 : 20 * Math.log10(volume);
-        this.volume.volume.rampTo(targetDb, rampTime);
+        this.volume.volume.rampTo(targetDb, rampTime, time);
     }
 
     public dispose() {

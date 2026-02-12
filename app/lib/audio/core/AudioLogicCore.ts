@@ -46,42 +46,72 @@ export class AudioLogicCore {
     private lastMode: 'face' | 'edge' | 'node' | null = null;
     private lastStructureKey: string = '';
 
+    // Mode Latching (Debouncing)
+    private pendingMode: 'face' | 'edge' | 'node' | null = null;
+    private modeTimestamp: number = 0;
+    private readonly DEBOUNCE_MS = 250; // Wait 250ms to confirm mode
+
     /**
      * Process game state into audio state
      * Now stateful: tracks previous calls to detect changes
      */
     processDetection(detection: DetectionState): AudioState {
-        const { mode, distanceToCenter, activeNotes, centerPos } = detection;
+        const { distanceToCenter, activeNotes, centerPos } = detection;
+        const now = performance.now();
 
-        // 1. Detect Changes
-        const modeChanged = this.lastMode !== mode;
+        let targetMode = detection.mode;
+
+        // 1. MODE DEBOUNCING (Hysteresis)
+        if (targetMode !== this.lastMode) {
+            if (targetMode !== this.pendingMode) {
+                // Potential new mode detected, start timer
+                this.pendingMode = targetMode;
+                this.modeTimestamp = now;
+            }
+
+            // Check if we've been in the pending mode long enough
+            if (now - this.modeTimestamp >= this.DEBOUNCE_MS) {
+                // Confirmed! (Commit change later)
+            } else {
+                // Too soon, stick with the stable lastMode
+                targetMode = this.lastMode || targetMode;
+            }
+        } else {
+            // Stable - clear pending
+            this.pendingMode = null;
+        }
+
+        const modeChanged = this.lastMode !== targetMode;
+
+        // 2. STRUCTURE TRACKING (Chord Changes)
         const structureKey = activeNotes.sort().join('-');
         const structureChanged = this.lastStructureKey !== structureKey || modeChanged;
 
         const previousMode = this.lastMode;
 
-        // 2. Generate Events
+        // 3. Generate Events
         const events: AudioEvent[] = [];
         if (modeChanged) {
             if (previousMode === 'node') {
-                events.push({ type: 'EXIT_NODE', payload: { nextMode: mode } });
+                events.push({ type: 'EXIT_NODE', payload: { nextMode: targetMode } });
             } else if (previousMode === 'edge') {
-                events.push({ type: 'EXIT_EDGE', payload: { nextMode: mode } });
+                events.push({ type: 'EXIT_EDGE', payload: { nextMode: targetMode } });
             } else if (previousMode === 'face') {
-                events.push({ type: 'EXIT_FACE', payload: { nextMode: mode } });
+                events.push({ type: 'EXIT_FACE', payload: { nextMode: targetMode } });
             }
-            events.push({ type: 'ENTER_MODE', payload: { mode, previousMode } });
+            events.push({ type: 'ENTER_MODE', payload: { mode: targetMode, previousMode } });
         }
+
         if (structureChanged && !modeChanged) {
             events.push({ type: 'STRUCTURE_CHANGE', payload: { notes: activeNotes } });
         }
 
-        // 3. Update internal state
-        this.lastMode = mode;
+        // 4. Update internal state
+        this.lastMode = targetMode;
         this.lastStructureKey = structureKey;
 
-        // 4. Calculate Volumes (Delegated to Config)
-        const calculatedMix = AudioConfig.calculateVolumes(mode, distanceToCenter);
+        // 5. Calculate Volumes (Delegated to Config)
+        const calculatedMix = AudioConfig.calculateVolumes(targetMode, distanceToCenter);
         const mix = {
             droneVolume: calculatedMix.drone,
             chordVolume: calculatedMix.chord,
@@ -90,9 +120,9 @@ export class AudioLogicCore {
             waveVolume: calculatedMix.wave
         };
 
-        // 5. Arp Pattern Logic
+        // 6. Arp Pattern Logic
         let arpPattern;
-        if (mode === 'edge' && activeNotes.length >= 2) {
+        if (targetMode === 'edge' && activeNotes.length >= 2) {
             arpPattern = {
                 notes: activeNotes.slice(0, 2),
                 positions: [centerPos, centerPos]

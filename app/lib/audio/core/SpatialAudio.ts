@@ -67,10 +67,13 @@ export function updateListener(
     forward: THREE.Vector3
 ): void {
     const listener = Tone.getListener();
-    listener.positionX.value = position.x;
-    listener.positionY.value = position.y;
-    listener.positionZ.value = position.z;
-    listener.forwardX.value = forward.x;
-    listener.forwardY.value = forward.y;
-    listener.forwardZ.value = forward.z;
+    const now = Tone.now();
+    const rampTime = 0.1; // Smooth movement 
+
+    listener.positionX.rampTo(position.x, rampTime, now);
+    listener.positionY.rampTo(position.y, rampTime, now);
+    listener.positionZ.rampTo(position.z, rampTime, now);
+    listener.forwardX.rampTo(forward.x, rampTime, now);
+    listener.forwardY.rampTo(forward.y, rampTime, now);
+    listener.forwardZ.rampTo(forward.z, rampTime, now);
 }

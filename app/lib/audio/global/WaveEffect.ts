@@ -12,14 +12,19 @@ import * as Tone from 'tone';
 import * as THREE from 'three';
 import { createSpatialPanner, updatePannerPosition } from '../core/SpatialAudio';
 import { AudioConfig } from '../core/AudioConfig';
+import { AudioPorts, MatrixPlayer } from '../core/Buses';
 
-export class WaveEffect {
+export class WaveEffect implements MatrixPlayer {
+    public readonly ports: AudioPorts;
     private player: Tone.Player;
     private filter: Tone.Filter;
     private pulseGain: Tone.Gain;  // The actual envelope (internal pulse)
-    private reverb: Tone.Reverb;
     private panner: Tone.Panner3D;
     private masterGain: Tone.Gain; // Global layer volume (external control)
+    private waveGain: Tone.Gain; // Reverb send volume (lush WaveBus)
+
+    // Pre-allocated objects for GC optimization
+    private readonly targetPos = new THREE.Vector3();
 
     // State
     private isPlaying = false;
@@ -30,6 +35,8 @@ export class WaveEffect {
     private waveCycle = 0;
     private lastWaveIndex = -1;
     private currentWaveIsWeak = false;
+    private lastUpdateTime = 0;
+    private readonly UPDATE_THROTTLE_MS = 33; // ~30fps is enough for spatial movement
 
     private readonly WAVE_PERIOD = 10.48; // User preferred slower period
     private readonly WAVE_DURATION = 4.0;  // Longer push for slower period
@@ -61,32 +68,30 @@ export class WaveEffect {
         // Pulse Gain (Envelope control)
         this.pulseGain = new Tone.Gain(this.BASE_VOLUME);
 
-        // Local reverb - Dynamic via AudioConfig
-        this.reverb = new Tone.Reverb({
-            decay: 7,
-            preDelay: 0.12,
-            wet: AudioConfig.mix.wave.reverbSend
-        });
-        this.reverb.generate(); // Pre-compute IR
-
-        // HRTF spatial positioning
+        // Equalpower spatial positioning (Lighter than HRTF for background)
         this.panner = createSpatialPanner({
             distanceModel: 'exponential',
             refDistance: 6,
             maxDistance: 80,
             rolloffFactor: 0.7,
-            useHRTF: true,
+            useHRTF: true, // Restored as per user request
         });
 
         // Destination gain (controlled via setVolume by GlobalPlayer/AudioController)
-        this.masterGain = new Tone.Gain(0).toDestination();
+        this.masterGain = new Tone.Gain(0);
+        this.waveGain = new Tone.Gain(AudioConfig.mix.wave.reverbSend);
 
-        // Chain: Player -> Filter -> PulseGain -> Reverb -> Panner -> MasterGain
+        this.ports = {
+            main: this.masterGain,
+            wave: this.waveGain
+        };
+
+        // Chain: Player -> Filter -> PulseGain -> Panner -> MasterGains
         this.player.connect(this.filter);
         this.filter.connect(this.pulseGain);
-        this.pulseGain.connect(this.reverb);
-        this.reverb.connect(this.panner);
+        this.pulseGain.connect(this.panner);
         this.panner.connect(this.masterGain);
+        this.panner.connect(this.waveGain);
     }
 
     public start() {
@@ -111,6 +116,11 @@ export class WaveEffect {
     public update(delta: number, centerPos: THREE.Vector3) {
         if (!this.isPlaying || this.isDisposed) return;
 
+        // PERFORMANCE THROTTLE: Limit updates to ~30fps for spatial/parameter changes
+        const realTime = performance.now();
+        if (realTime - this.lastUpdateTime < this.UPDATE_THROTTLE_MS) return;
+        this.lastUpdateTime = realTime;
+
         this.time += delta;
         this.waveCycle += delta;
 
@@ -118,12 +128,10 @@ export class WaveEffect {
         const waveIndex = Math.floor(this.waveCycle / this.WAVE_PERIOD);
         const now = Tone.now();
 
-        // 1. Randomization Trigger (At the start of each wave cycle)
         if (waveIndex !== this.lastWaveIndex) {
             this.lastWaveIndex = waveIndex;
             // 1:9 ratio for weak vs strong waves (Math.random() < 0.1)
             this.currentWaveIsWeak = Math.random() < 0.1;
-            console.log(`[WaveEffect] New wave cycle: ${waveIndex}, Strength: ${this.currentWaveIsWeak ? 'WEAK' : 'STRONG'}`);
         }
 
         // Target state variables
@@ -140,7 +148,7 @@ export class WaveEffect {
             // Strong Wave params
             let peakMultiplier = 3.5;
             let radiusApproach = 18; // Hits 18 units at peak (36 - 18)
-            let brightnessPeak = 3000;
+            let brightnessPeak = 4000;
 
             // Weak Wave params (Smaller, gentler ripple)
             if (this.currentWaveIsWeak) {
@@ -158,40 +166,40 @@ export class WaveEffect {
             filterFreq = 1000 + (curve * brightnessPeak);
 
             // Apply Position
-            const targetPos = new THREE.Vector3(
+            this.targetPos.set(
                 centerPos.x + Math.cos(angle) * radius,
                 centerPos.y + 1.2,
                 centerPos.z + Math.sin(angle) * radius
             );
-            updatePannerPosition(this.panner, targetPos, 0.1);
+            updatePannerPosition(this.panner, this.targetPos, 0.1);
         } else {
             // 4. Pause Logic (Continuous rotation still applies for consistent spatiality)
             const angle = (this.waveCycle / this.WAVE_PERIOD) * Math.PI * 2;
 
-            const targetPos = new THREE.Vector3(
+            this.targetPos.set(
                 centerPos.x + Math.cos(angle) * 36,
                 centerPos.y + 1.2,
                 centerPos.z + Math.sin(angle) * 36
             );
-            updatePannerPosition(this.panner, targetPos, 0.5);
+            updatePannerPosition(this.panner, this.targetPos, 0.5);
 
             intensity = this.BASE_VOLUME * 0.8;
             filterFreq = 800;
         }
 
         // Apply Envelope and Tone Shaping
-        this.pulseGain.gain.setTargetAtTime(intensity, now, 0.15); // Slightly slower target for smoothness
-        this.filter.frequency.setTargetAtTime(filterFreq, now, 0.15);
+        // Using exponentialRampToValueAtTime or setTargetAtTime with a consistent constant
+        this.pulseGain.gain.setTargetAtTime(intensity, now, 0.1);
+        this.filter.frequency.setTargetAtTime(filterFreq, now, 0.1);
     }
 
-    public setVolume(volume: number, rampTime: number = 0.5) {
+    public setVolume(volume: number, rampTime: number = 0.5, time: number) {
         if (this.isDisposed) return;
 
         // Avoid redundant ramps if volume hasn't changed much
         if (Math.abs(this.masterGain.gain.value - volume) < 0.001) return;
 
-        console.log(`[WaveEffect] Setting volume to ${volume.toFixed(2)} (ramp: ${rampTime}s)`);
-        this.masterGain.gain.rampTo(volume, rampTime);
+        this.masterGain.gain.rampTo(volume, rampTime, time);
 
         if (volume > 0.001) {
             if (!this.isPlaying) this.start();
@@ -218,8 +226,8 @@ export class WaveEffect {
         this.player.dispose();
         this.filter.dispose();
         this.pulseGain.dispose();
-        this.reverb.dispose();
         this.panner.dispose();
         this.masterGain.dispose();
+        this.waveGain.dispose();
     }
 }

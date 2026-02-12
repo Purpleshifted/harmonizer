@@ -80,7 +80,7 @@ export function loadInstrument(name: InstrumentName): Tone.Sampler {
     }
 
     const samplerOptions: Partial<Tone.SamplerOptions> = {
-        release: 4.0,
+        release: 8.0, // Increased from 4.0 for lush tails
         attack: 2.5,
         curve: 'exponential',
         urls: urls,

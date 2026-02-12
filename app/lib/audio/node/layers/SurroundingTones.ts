@@ -15,9 +15,6 @@ export class SurroundingTones {
     private spatializer: Spatializer;
     private isPlaying = false;
     private isDisposed = false;
-
-    // Candidates state
-    private candidates: { note: string, pos: THREE.Vector3 }[] = [];
     private loop: Tone.Loop;
 
     constructor() {
@@ -44,27 +41,18 @@ export class SurroundingTones {
      * Update the candidate pool of surrounding notes
      */
     public updateCandidates(notes: string[], positions: THREE.Vector3[]) {
-        if (notes.length !== positions.length) return;
-
-        this.candidates = notes.map((note, i) => ({
-            note,
-            pos: positions[i]
-        }));
+        this.spatializer.updateCandidates(notes, positions);
     }
 
     private triggerRandomSparkle(time: number) {
-        if (!this.isPlaying || this.candidates.length === 0 || this.isDisposed) return;
+        if (!this.isPlaying || this.isDisposed) return;
 
         // 30% chance to play on any given measure check
         if (Math.random() > 0.4) return;
 
-        // Pick random neighbor
-        const idx = Math.floor(Math.random() * this.candidates.length);
-        const candidate = this.candidates[idx];
+        // 1. Pick random candidate and update spatial position (Delegated to Spatializer)
+        const candidate = this.spatializer.pickRandomCandidate();
         if (!candidate) return;
-
-        // 1. Move Spatializer to position (Immediate jump is fine for discrete sparkles)
-        this.spatializer.update(candidate.pos, 0.1);
 
         // 2. Play Note
         const note = ensureOctave(candidate.note, 5 + (Math.random() > 0.5 ? 1 : 0)); // Octave 5 or 6
@@ -78,10 +66,10 @@ export class SurroundingTones {
         this.isPlaying = true;
     }
 
-    public stop() {
+    public stop(time: number = Tone.now()) {
         if (this.isDisposed) return;
         this.isPlaying = false;
-        this.synth.releaseAll();
+        this.synth.releaseAll(time);
     }
 
     public dispose() {

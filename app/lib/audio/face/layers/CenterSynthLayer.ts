@@ -32,8 +32,8 @@ export class CenterSynthLayer {
         });
     }
 
-    public setVolume(scale: number, rampTime: number) {
-        this.outputFader.rampTo(0.3 * scale, rampTime);
+    public setVolume(scale: number, rampTime: number, time: number) {
+        this.outputFader.rampTo(0.3 * scale, rampTime, time);
     }
 
     public stop() {

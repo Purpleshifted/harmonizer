@@ -8,6 +8,7 @@ import { FacePlayer } from '../player/FacePlayer';
 import { EdgePlayer } from '../player/EdgePlayer';
 import { NodePlayer } from '../player/NodePlayer';
 import { updateListener } from './SpatialAudio';
+import { BusSystem } from './Buses';
 
 /**
  * Orchestrator - The central mediator for the Tonnetz audio system.
@@ -16,16 +17,14 @@ import { updateListener } from './SpatialAudio';
  * using results from AudioLogicCore. This decouples audio logic from React.
  */
 export class Orchestrator {
-    // Reverb Buses
-    private ambientReverb: Tone.Reverb;
-    private spatialReverb: Tone.Reverb;
-    private deepReverb: Tone.Reverb;
-
     // Mode Players
     private globalPlayer: GlobalPlayer;
     private facePlayer: FacePlayer;
     private edgePlayer: EdgePlayer;
     private nodePlayer: NodePlayer;
+
+    // Bus System
+    private busSystem: BusSystem;
 
     // Core Logic
     private logicCore: AudioLogicCore;
@@ -37,7 +36,7 @@ export class Orchestrator {
         orchestraVol: 0.8,
         arpVol: 1.0,
         padVol: 1.0,
-        waveVol: 0.2
+        waveVol: 0.05
     };
 
     // Throttling for Spatial Updates
@@ -52,24 +51,20 @@ export class Orchestrator {
     constructor() {
         console.log('[Orchestrator] Initializing Audio Engine...');
 
-        // 1. Initialize Reverb Buses (Wet = 1.0 because they are Send buses)
-        this.ambientReverb = createReverb('ambient');
-        this.ambientReverb.wet.value = 1.0;
-        this.ambientReverb.toDestination();
-
-        this.spatialReverb = createReverb('spatial');
-        this.spatialReverb.wet.value = 1.0;
-        this.spatialReverb.toDestination();
-
-        this.deepReverb = createReverb('deep');
-        this.deepReverb.wet.value = 1.0;
-        this.deepReverb.toDestination();
+        // 1. Initialize Bus System
+        this.busSystem = new BusSystem();
 
         // 2. Initialize Mode Players
-        this.globalPlayer = new GlobalPlayer(this.ambientReverb);
-        this.facePlayer = new FacePlayer(this.spatialReverb, this.deepReverb);
-        this.edgePlayer = new EdgePlayer(this.spatialReverb, this.deepReverb);
-        this.nodePlayer = new NodePlayer(this.deepReverb);
+        this.globalPlayer = new GlobalPlayer();
+        this.facePlayer = new FacePlayer();
+        this.edgePlayer = new EdgePlayer();
+        this.nodePlayer = new NodePlayer();
+
+        // 3. Connect Players to Matrix
+        this.busSystem.connectPlayer(this.globalPlayer);
+        this.busSystem.connectPlayer(this.facePlayer);
+        this.busSystem.connectPlayer(this.edgePlayer);
+        this.busSystem.connectPlayer(this.nodePlayer);
 
         // 3. Initialize Logic Engine
         this.logicCore = new AudioLogicCore();
@@ -93,6 +88,9 @@ export class Orchestrator {
     public update(detection: any, camera: THREE.Camera, delta: number) {
         if (this.isDisposed || !detection) return;
 
+        // --- LOOKAHEAD SCHEDULING ---
+        // Calculate a stable future time for all events in this frame
+        const targetTime = Tone.now() + AudioConfig.timing.lookAhead;
         const currentMode = detection.mode;
 
         // 1. Prepare Logic State from raw detection data
@@ -135,33 +133,38 @@ export class Orchestrator {
         const { ambientVol, orchestraVol, arpVol, padVol, waveVol } = this.mixVolumes;
 
         // --- Mode: Face ---
-        this.facePlayer.update(detection, structureChanged, orchestraVol);
-        if (modeChanged) {
-            this.facePlayer.setVolume(
-                mix.chordVolume * orchestraVol,
-                (currentMode === 'face' ? 1.0 : 0.0) * orchestraVol,
-                AudioConfig.timing.fadeTime
-            );
-        }
+        // --- Mode: Face ---
+        this.facePlayer.update(detection, structureChanged, orchestraVol, targetTime);
+
+        // Dynamic Volume Update (Every frame)
+        const faceRamp = modeChanged ? AudioConfig.timing.fadeTime : 0.1;
+        this.facePlayer.setVolume(
+            mix.chordVolume * orchestraVol,
+            (currentMode === 'face' ? 1.0 : 0.0) * orchestraVol,
+            faceRamp,
+            targetTime
+        );
 
         // --- Mode: Edge ---
-        this.edgePlayer.update(detection, structureChanged, arpVol);
-        if (modeChanged) {
-            this.edgePlayer.setVolume(mix.arpVolume * arpVol, AudioConfig.timing.fadeTime);
-        }
+        // --- Mode: Edge ---
+        this.edgePlayer.update(detection, structureChanged, arpVol, targetTime);
+
+        const edgeRamp = modeChanged ? AudioConfig.timing.fadeTime : 0.1;
+        this.edgePlayer.setVolume(mix.arpVolume * arpVol, edgeRamp, targetTime);
 
         // --- Mode: Node ---
-        this.nodePlayer.update(detection, structureChanged, padVol);
-        if (modeChanged) {
-            this.nodePlayer.setVolume(mix.focusVolume * padVol, AudioConfig.timing.fadeTime);
-        }
+        // --- Mode: Node ---
+        this.nodePlayer.update(detection, structureChanged, padVol, targetTime);
+
+        const nodeRamp = modeChanged ? AudioConfig.timing.fadeTime : 0.1;
+        this.nodePlayer.setVolume(mix.focusVolume * padVol, nodeRamp, targetTime);
 
         // 5. Process Transition Events (Exit Triggers)
         events.forEach(event => {
             switch (event.type) {
-                case 'EXIT_NODE': this.nodePlayer.triggerExit(); break;
-                case 'EXIT_EDGE': this.edgePlayer.triggerExit(); break;
-                case 'EXIT_FACE': this.facePlayer.triggerExit(); break;
+                case 'EXIT_NODE': this.nodePlayer.triggerExit(targetTime); break;
+                case 'EXIT_EDGE': this.edgePlayer.triggerExit(targetTime); break;
+                case 'EXIT_FACE': this.facePlayer.triggerExit(targetTime); break;
             }
         });
 
@@ -173,14 +176,14 @@ export class Orchestrator {
             distance: n.distance
         });
 
-        this.globalPlayer.setVolumes(mix.droneVolume * ambientVol, mix.waveVolume * waveVol);
-        this.globalPlayer.update(delta, detection.centerPos || new THREE.Vector3(), detection.nearestFourNotes.map(mapToAudioNode));
+        this.globalPlayer.setVolumes(mix.droneVolume * ambientVol, mix.waveVolume * waveVol, targetTime);
+        this.globalPlayer.update(delta, detection.centerPos || new THREE.Vector3(), detection.nearestFourNotes.map(mapToAudioNode), targetTime);
 
         // Node Focus Handling
         if (currentMode === 'node' && detection.activeNodes.length > 0) {
-            this.globalPlayer.focusOnNode(detection.activeNodes[0].note.name, 0.6);
+            this.globalPlayer.focusOnNode(detection.activeNodes[0].note.name, 0.6, targetTime);
         } else {
-            this.globalPlayer.clearFocus();
+            this.globalPlayer.clearFocus(targetTime);
         }
 
         this.lastMode = currentMode;
@@ -193,7 +196,7 @@ export class Orchestrator {
         if (this.isDisposed) return;
         this.mixVolumes = { ...volumes };
         // Sync global players immediately
-        this.globalPlayer.setVolumes(this.mixVolumes.ambientVol, this.mixVolumes.waveVol);
+        this.globalPlayer.setVolumes(this.mixVolumes.ambientVol, this.mixVolumes.waveVol, Tone.now());
     }
 
     /**
@@ -209,8 +212,6 @@ export class Orchestrator {
         this.edgePlayer.dispose();
         this.nodePlayer.dispose();
 
-        this.ambientReverb.dispose();
-        this.spatialReverb.dispose();
-        this.deepReverb.dispose();
+        this.busSystem.dispose();
     }
 }

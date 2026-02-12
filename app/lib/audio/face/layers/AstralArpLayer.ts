@@ -8,7 +8,7 @@ export class AstralArpLayer {
     private filter: Tone.Filter;
     private delay: Tone.FeedbackDelay;
     private outputFader: Fader;
-    private sequence: Tone.Sequence | null = null;
+    private sequence: Tone.Sequence; // No longer null
     private isAudible = false;
 
     constructor(dryDest: Tone.ToneAudioNode, sendDest: Tone.ToneAudioNode) {
@@ -25,17 +25,23 @@ export class AstralArpLayer {
         // Astral splits manually to dry/send gain nodes passed in
         this.outputFader.connect(dryDest);
         this.outputFader.connect(sendDest);
+
+        // Pre-initialize reusable sequence
+        this.sequence = new Tone.Sequence<string | null>((time, note) => {
+            if (note && this.isAudible) {
+                try {
+                    this.synth.triggerAttackRelease(note, "4n", time, 0.3);
+                } catch { }
+            }
+        }, [], "4n");
     }
 
     public updateSequence(notes: string[], isMajor: boolean) {
-        if (this.sequence) {
-            this.sequence.stop();
-            this.sequence.dispose();
-            this.sequence = null;
-        }
-
         const validNotes = notes.filter(n => n && typeof n === 'string');
-        if (validNotes.length === 0) return;
+        if (validNotes.length === 0) {
+            this.sequence.events = [];
+            return;
+        }
 
         const expandedNotes: string[] = [];
         validNotes.forEach(note => {
@@ -56,18 +62,15 @@ export class AstralArpLayer {
             } else patternEvents.push(null);
         }
 
-        this.sequence = new Tone.Sequence((time, note) => {
-            if (note && this.isAudible) {
-                try {
-                    this.synth.triggerAttackRelease(note, "4n", time, 0.3);
-                } catch { }
-            }
-        }, patternEvents, "4n");
-        this.sequence.start(0);
+        // JUST UPDATE EVENTS - NO DISPOSE/NEW
+        this.sequence.events = patternEvents;
+        if (this.sequence.state !== 'started') {
+            this.sequence.start(0);
+        }
     }
 
-    public setVolume(scale: number, rampTime: number) {
-        this.outputFader.rampTo(1.0 * scale, rampTime);
+    public setVolume(scale: number, rampTime: number, time: number) {
+        this.outputFader.rampTo(1.0 * scale, rampTime, time);
         this.isAudible = scale > 0.001;
     }
 

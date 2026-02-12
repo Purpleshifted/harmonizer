@@ -13,6 +13,7 @@ import { ensureOctave } from '../core/NoteUtils';
 import { createSpatialPanner, updatePannerPosition } from '../core/SpatialAudio';
 import { createReverb, createDelay } from '../core/ReverbFactory';
 import { AudioConfig } from '../core/AudioConfig';
+import { AudioPorts, MatrixPlayer } from '../core/Buses';
 
 interface IndependentVoice {
     synth: Tone.Synth;  // Monophonic synth for each voice (no PolySynth overhead)
@@ -23,17 +24,14 @@ interface IndependentVoice {
     isEdgeNode: boolean; // true = main pattern, false = sparkle pattern
 }
 
-export class ArpeggiatorPlayer {
+export class ArpeggiatorPlayer implements MatrixPlayer {
+    public readonly ports: AudioPorts;
     // Shared Effects Chain (Post-Synth)
     // Shared Effects Chain (Post-Synth)
     private filter: Tone.Filter;
     private delay: Tone.FeedbackDelay;
     private masterGain: Tone.Gain;
     private limiter: Tone.Limiter;
-
-    // Shared Reverbs (Injected)
-    private spatialReverb: Tone.Reverb;
-    private deepReverb: Tone.Reverb;
 
     // Split Gains
     private dryGain: Tone.Gain;
@@ -56,12 +54,17 @@ export class ArpeggiatorPlayer {
     // Timing
     private readonly FADE_IN_TIME = 1.5;
 
-    constructor(sharedSpatialReverb: Tone.Reverb, sharedDeepReverb: Tone.Reverb) {
-        this.spatialReverb = sharedSpatialReverb;
-        this.deepReverb = sharedDeepReverb;
-
-        this.limiter = new Tone.Limiter(-6).toDestination();
+    constructor() {
+        this.limiter = new Tone.Limiter(-6);
         this.masterGain = new Tone.Gain(0).connect(this.limiter);
+
+        this.ports = {
+            main: new Tone.Gain(1.0),
+            spatial: new Tone.Gain(1.0),
+            deep: new Tone.Gain(1.0)
+        };
+
+        this.limiter.connect(this.ports.main);
 
         // Main effects chain
         // Filter -> Delay -> Split(Dry, Spatial, Deep)
@@ -76,8 +79,11 @@ export class ArpeggiatorPlayer {
         // Split Architecture - Linked to AudioConfig
         const config = AudioConfig.mix.arp;
         this.dryGain = new Tone.Gain(1 - config.spatialSend - config.deepSend).connect(this.masterGain);
-        this.spatialSend = new Tone.Gain(config.spatialSend).connect(this.spatialReverb);
-        this.deepSend = new Tone.Gain(config.deepSend).connect(this.deepReverb);
+        this.spatialSend = new Tone.Gain(config.spatialSend);
+        if (this.ports.spatial) this.spatialSend.connect(this.ports.spatial);
+
+        this.deepSend = new Tone.Gain(config.deepSend);
+        if (this.ports.deep) this.deepSend.connect(this.ports.deep);
 
         // Chain
         this.filter.connect(this.delay);
@@ -100,7 +106,7 @@ export class ArpeggiatorPlayer {
             const synth = new Tone.Synth({
                 oscillator: { type: 'sine' },
                 envelope: {
-                    attack: 0.002,
+                    attack: 0.015, // Softened from 0.002 to prevent transients
                     decay: 0.4,
                     sustain: 0.1,
                     release: 0.8,
@@ -143,10 +149,9 @@ export class ArpeggiatorPlayer {
         }
     }
 
-    setGlobalVolume(volume: number, rampTime: number = 0.1) {
+    setGlobalVolume(volume: number, rampTime: number = 0.1, time: number) {
         if (this.isDisposed) return;
-        const now = Tone.now();
-        this.masterGain.gain.rampTo(volume, rampTime, now);
+        this.masterGain.gain.rampTo(volume, rampTime, time);
 
         if (volume > 0.01 && !this.isPlaying) {
             Tone.getTransport().start();
@@ -167,8 +172,8 @@ export class ArpeggiatorPlayer {
         _distance1: number,
         _distance2: number,
         _edgeMidpoint: THREE.Vector3,
-        nearbyNotes?: string[],
-        nearbyPositions?: THREE.Vector3[]
+        nearbyNeighbors: any[] | undefined,
+        time: number
     ) {
         if (this.isDisposed) return;
 
@@ -176,35 +181,35 @@ export class ArpeggiatorPlayer {
 
         // Just update positions if edge hasn't changed
         if (this.currentEdgeKey === edgeKey) {
-            this.updatePositions(pos1, pos2, nearbyPositions || []);
+            this.updatePositions(pos1, pos2, nearbyNeighbors || []);
             return;
         }
 
         this.currentEdgeKey = edgeKey;
-        const now = Tone.now();
 
         // 1. Setup Edge Voices (Voice 0 & 1)
-        this.setupVoice(0, note1, pos1, true);
-        this.setupVoice(1, note2, pos2, true);
+        this.setupVoice(0, note1, pos1, true, time);
+        this.setupVoice(1, note2, pos2, true, time);
 
         // 2. Setup Nearby Voices (Voice 2..6)
-        const nearbyCount = Math.min(nearbyNotes?.length || 0, this.MAX_VOICES - 2);
+        const nearbyCount = Math.min(nearbyNeighbors?.length || 0, this.MAX_VOICES - 2);
 
         for (let i = 0; i < nearbyCount; i++) {
-            if (nearbyNotes && nearbyPositions) {
-                this.setupVoice(i + 2, nearbyNotes[i], nearbyPositions[i], false);
+            if (nearbyNeighbors) {
+                const neighbor = nearbyNeighbors[i];
+                this.setupVoice(i + 2, neighbor.note.name, neighbor.pos, false, time);
             }
         }
 
         // Disable unused voices
         for (let i = nearbyCount + 2; i < this.MAX_VOICES; i++) {
             const voice = this.voices[i];
-            voice.gain.gain.rampTo(0, 0.5, now);
+            voice.gain.gain.rampTo(0, 0.5, time);
             voice.sequence.events = []; // Clear events to silence
         }
 
         // Fade in Master
-        this.masterGain.gain.rampTo(0.5, this.FADE_IN_TIME, now);
+        this.masterGain.gain.rampTo(0.5, this.FADE_IN_TIME, time);
 
         if (Tone.getTransport().state !== 'started') {
             Tone.getTransport().start();
@@ -212,15 +217,14 @@ export class ArpeggiatorPlayer {
         this.isPlaying = true;
     }
 
-    private setupVoice(index: number, note: string, position: THREE.Vector3, isEdgeNode: boolean) {
+    private setupVoice(index: number, note: string, position: THREE.Vector3, isEdgeNode: boolean, time: number) {
         const voice = this.voices[index];
         if (!voice) return;
 
-        const now = Tone.now();
         const noteWithOctave = ensureOctave(note, isEdgeNode ? 5 : 6);
 
-        // Update panner position (Throttled wrapper already used, but immediate jump here)
-        updatePannerPosition(voice.panner, position, 0);
+        // Update panner position (Using smooth ramp even for setup)
+        updatePannerPosition(voice.panner, position, 0.15);
         voice.currentNote = noteWithOctave;
         voice.isEdgeNode = isEdgeNode;
 
@@ -229,12 +233,12 @@ export class ArpeggiatorPlayer {
             // Main pattern (8n)
             const pattern = this.generateMainPattern(noteWithOctave);
             voice.sequence.events = pattern;
-            voice.gain.gain.rampTo(0.6, 0.5, now);
+            voice.gain.gain.rampTo(0.6, 0.5, time);
         } else {
             // Sparkle pattern (16n)
             const pattern = this.generateSparklePattern(noteWithOctave);
             voice.sequence.events = pattern;
-            voice.gain.gain.rampTo(0.15, 0.5, now);
+            voice.gain.gain.rampTo(0.15, 0.5, time);
         }
     }
 
@@ -264,16 +268,16 @@ export class ArpeggiatorPlayer {
         return pattern;
     }
 
-    updatePositions(pos1: THREE.Vector3, pos2: THREE.Vector3, nearbyPositions: THREE.Vector3[]) {
+    updatePositions(pos1: THREE.Vector3, pos2: THREE.Vector3, nearbyNeighbors: any[]) {
         if (this.isDisposed) return;
 
         updatePannerPosition(this.voices[0].panner, pos1, 0.1);
         updatePannerPosition(this.voices[1].panner, pos2, 0.1);
 
-        nearbyPositions.forEach((pos, i) => {
+        nearbyNeighbors.forEach((neighbor, i) => {
             const idx = i + 2;
             if (idx < this.MAX_VOICES) {
-                updatePannerPosition(this.voices[idx].panner, pos, 0.1);
+                updatePannerPosition(this.voices[idx].panner, neighbor.pos, 0.1);
             }
         });
     }

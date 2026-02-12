@@ -87,35 +87,34 @@ export class CentorTone {
         this.noiseSynth.connect(effector.directInput);
     }
 
-    public start(note: string) {
+    public start(note: string, time: number) {
         if (this.isDisposed) return;
-        const now = Tone.now();
 
         // 1. Debounce (0.1s safety)
-        if (now - this.lastTriggerTime < 0.1) return;
+        if (time - this.lastTriggerTime < 0.1) return;
 
         // 2. Avoid re-triggering same note if already playing
         if (this.isPlaying && this.currentNote === note) return;
 
-        this.lastTriggerTime = now;
+        this.lastTriggerTime = time;
 
         // Release previous
-        this.synth.releaseAll();
+        this.synth.releaseAll(time);
 
         const exactNote = ensureOctave(note, 4);
         const fifthNote = transposeSemitones(exactNote, 7);
 
         // Trigger root strongly, fifth weakly
-        this.synth.triggerAttack(exactNote, now, 1.0);
-        this.synth.triggerAttack(fifthNote, now, 0.15);
+        this.synth.triggerAttack(exactNote, time, 1.0);
+        this.synth.triggerAttack(fifthNote, time, 0.15);
 
         this.currentNote = note;
         this.isPlaying = true;
     }
 
-    public stop() {
+    public stop(time: number) {
         if (!this.isPlaying || this.isDisposed) return;
-        this.synth.releaseAll();
+        this.synth.releaseAll(time);
         this.isPlaying = false;
         this.currentNote = null;
     }
@@ -123,15 +122,15 @@ export class CentorTone {
     /**
      * Trigger a washing noise wave on exit
      */
-    public triggerExitEffect() {
+    public triggerExitEffect(time: number) {
         if (this.isDisposed) return;
-        this.noiseSynth.triggerAttackRelease("2n", Tone.now(), 0.2);
+        this.noiseSynth.triggerAttackRelease("2n", time, 0.2);
     }
 
     public dispose() {
         if (this.isDisposed) return;
         this.isDisposed = true;
-        this.stop();
+        this.stop(Tone.now());
         this.synth.dispose();
         this.filter.dispose();
         this.lfo.dispose();

@@ -1,66 +1,68 @@
 import * as Tone from 'tone';
 import * as THREE from 'three';
 import { ensureOctave } from '../../core/NoteUtils';
-import { Spatializer } from '../engine/Spatializer';
+import { createSpatialPanner, updatePannerPosition } from '../../core/SpatialAudio';
 import { SeamRemover } from '../engine/SeamRemover';
 import { Fader } from '../engine/Fader';
 import { loadInstrument } from '../factory/InstrumentFactory';
 
 class HornVoice {
-    private spatializer: Spatializer;
+    private spatializer: Tone.Panner3D;
     private fader: Fader;
     private samplerA: Tone.Sampler;
     private samplerB: Tone.Sampler;
     private seamRemover: SeamRemover;
+    private readonly zeroVector = new THREE.Vector3();
 
     public currentNote: string | null = null;
     public isAllocated = false;
 
     constructor(destination: Tone.ToneAudioNode) {
-        this.spatializer = new Spatializer({ refDist: 2, maxDist: 30 });
+        this.spatializer = createSpatialPanner({ useHRTF: false, refDistance: 2, maxDistance: 30 });
         this.fader = new Fader(0);
         this.samplerA = loadInstrument('french-horn');
         this.samplerB = loadInstrument('french-horn');
         this.samplerA.volume.value = -2;
         this.samplerB.volume.value = -2;
 
-        this.samplerA.connect(this.spatializer.panner);
-        this.samplerB.connect(this.spatializer.panner);
+        this.samplerA.connect(this.spatializer);
+        this.samplerB.connect(this.spatializer);
         this.spatializer.connect(this.fader.gain);
         this.fader.connect(destination);
 
         this.seamRemover = new SeamRemover(this.samplerA, this.samplerB);
     }
 
-    public activate(note: string, pos: THREE.Vector3, now: number) {
+    public activate(note: string, pos: THREE.Vector3, time: number) {
         this.currentNote = note;
         this.isAllocated = true;
-        this.spatializer.update(pos, 0);
+        updatePannerPosition(this.spatializer, pos, 0);
 
         const hornNote = ensureOctave(note, 3);
         if (this.samplerA.loaded) {
-            this.samplerA.triggerAttack(hornNote, now, 0.8);
+            this.samplerA.triggerAttack(hornNote, time, 0.8);
         }
 
-        this.fader.rampTo(0.6, 2.0, now);
+        this.fader.rampTo(0.6, 2.0, time);
     }
 
-    public deactivate(now: number) {
+    public deactivate(time: number) {
         this.isAllocated = false;
         const note = this.currentNote;
         this.currentNote = null;
-        this.fader.rampTo(0, 1.0, now);
+        this.fader.rampTo(0, 4.0, time);
 
-        setTimeout(() => {
+        // USE Tone.getContext().setTimeout for better accuracy across threads
+        (Tone.getContext() as any).setTimeout(() => {
             if (!this.isAllocated && note) {
-                this.seamRemover.releaseAll(ensureOctave(note, 3), now);
+                this.seamRemover.releaseAll(ensureOctave(note, 3), Tone.now());
             }
-        }, 1200);
+        }, 4.2); // Context timeout uses seconds
     }
 
-    public sustainLoop(now: number) {
+    public sustainLoop(time: number) {
         if (!this.isAllocated || !this.currentNote) return;
-        this.seamRemover.sustainOverlap(ensureOctave(this.currentNote, 3), now, 0.6);
+        this.seamRemover.sustainOverlap(ensureOctave(this.currentNote, 3), time, 0.6);
     }
 
     public dispose() {
@@ -75,6 +77,7 @@ export class HornLayer {
     private pool: HornVoice[] = [];
     private activeMap: Map<string, HornVoice> = new Map();
     private readonly MAX_VOICES = 4;
+    private readonly zeroPoolVector = new THREE.Vector3();
 
     constructor(destination: Tone.ToneAudioNode) {
         for (let i = 0; i < this.MAX_VOICES; i++) {
@@ -82,14 +85,13 @@ export class HornLayer {
         }
     }
 
-    public update(notes: string[], positions: THREE.Vector3[]) {
-        const now = Tone.now();
+    public update(notes: string[], positions: THREE.Vector3[], time: number) {
         const nextNotes = new Set(notes.map(n => ensureOctave(n, 3)));
 
         // Remove obsolete
         for (const [note, voice] of this.activeMap) {
             if (!nextNotes.has(note)) {
-                voice.deactivate(now);
+                voice.deactivate(time);
                 this.activeMap.delete(note);
             }
         }
@@ -100,16 +102,16 @@ export class HornLayer {
             if (!this.activeMap.has(note)) {
                 const freeVoice = this.pool.find(v => !v.isAllocated);
                 if (freeVoice) {
-                    const pos = positions[i] || new THREE.Vector3();
-                    freeVoice.activate(note, pos, now);
+                    const pos = positions[i] || (this as any).zeroPoolVector;
+                    freeVoice.activate(note, pos, time);
                     this.activeMap.set(note, freeVoice);
                 }
             }
         });
     }
 
-    public sustainLoop(now: number) {
-        this.activeMap.forEach(voice => voice.sustainLoop(now));
+    public sustainLoop(time: number) {
+        this.activeMap.forEach(voice => voice.sustainLoop(time));
     }
 
     public stop() {

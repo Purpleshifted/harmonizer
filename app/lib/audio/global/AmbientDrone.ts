@@ -8,8 +8,9 @@ import * as Tone from 'tone';
 import * as THREE from 'three';
 import { noteToFreq, ensureOctave } from '../core/NoteUtils';
 import { createSpatialPanner, updatePannerPosition, updateListener } from '../core/SpatialAudio';
-import { createReverb } from '../core/ReverbFactory';
 import { AudioConfig } from '../core/AudioConfig';
+import { AudioPorts, MatrixPlayer } from '../core/Buses';
+import { HarmonicSaturator } from '../engine/HarmonicSaturator';
 
 interface NoteVoice {
     oscillator: Tone.Oscillator;
@@ -20,32 +21,46 @@ interface NoteVoice {
     isPlaying: boolean;
 }
 
-export class AmbientDrone {
+export class AmbientDrone implements MatrixPlayer {
+    public readonly ports: AudioPorts;
     private voices: NoteVoice[] = [];
     private dryGain: Tone.Gain;
     private sendGain: Tone.Gain;
-    // Restored properties
-    private reverb: Tone.Reverb;
     private masterGain: Tone.Gain;
+    private saturator: HarmonicSaturator;
     private limiter: Tone.Limiter;
     private isDisposed = false;
     private isStarted = false;
     private lastUpdateTime = 0;
     private updateThrottleMs = 50;
 
-    constructor(sharedReverb: Tone.Reverb) {
-        // Add limiter to prevent clipping
-        this.limiter = new Tone.Limiter(-3).toDestination();
-        this.masterGain = new Tone.Gain(0.2); // Removed connection to limiter (will go to split)
-        this.reverb = sharedReverb;
+    constructor() {
+        this.masterGain = new Tone.Gain(0.2);
+        this.saturator = new HarmonicSaturator();
+        this.saturator.drive = 1.5;
+        this.saturator.mix = 0.4;
 
-        // Split Architecture for Shared Reverb - Dynamic via AudioConfig
+        this.limiter = new Tone.Limiter(-3);
+
+        // Setup outputs
+        this.dryGain = new Tone.Gain(1.0);
+        this.sendGain = new Tone.Gain(1.0);
+
+        this.ports = {
+            main: this.dryGain,
+            ambient: this.sendGain
+        };
+
+        // Internal routing
+        this.masterGain.connect(this.saturator);
+        this.saturator.connect(this.limiter);
+        this.limiter.connect(this.dryGain);
+        this.limiter.connect(this.sendGain);
+
+        // Mix ratios for ports (send levels)
         const reverbSend = AudioConfig.mix.drone.reverbSend;
-        this.dryGain = new Tone.Gain(1 - reverbSend).connect(this.limiter);
-        this.sendGain = new Tone.Gain(reverbSend).connect(this.reverb);
-
-        this.masterGain.connect(this.dryGain);
-        this.masterGain.connect(this.sendGain);
+        this.dryGain.gain.value = 1 - reverbSend;
+        this.sendGain.gain.value = reverbSend;
 
         // Create 4 voices using continuous oscillators
         for (let i = 0; i < 4; i++) {
@@ -94,7 +109,8 @@ export class AmbientDrone {
             value: number;
             position: THREE.Vector3;
             distance: number;
-        }>
+        }>,
+        time: number
     ) {
         if (this.isDisposed || !this.isStarted) return;
 
@@ -102,8 +118,6 @@ export class AmbientDrone {
         const now = performance.now();
         if (now - this.lastUpdateTime < this.updateThrottleMs) return;
         this.lastUpdateTime = now;
-
-        const toneNow = Tone.now();
 
         notes.forEach((note, i) => {
             if (i >= this.voices.length) return;
@@ -118,15 +132,15 @@ export class AmbientDrone {
             // Calculate gain based on distance and position (1-2 louder, 3-4 quieter)
             const positionMultiplier = i < 2 ? 1.0 : 0.35;
             const distanceGain = Math.max(0, 1 - note.distance / 25);
-            const targetGain = distanceGain * positionMultiplier * 0.15;
+            const targetGain = distanceGain * positionMultiplier * 0.10;
 
             // Smooth gain transition
-            voice.gain.gain.rampTo(targetGain, 0.2, toneNow);
+            voice.gain.gain.rampTo(targetGain, 0.2, time);
 
             // Smoothly transition frequency instead of retriggering
             if (voice.currentNote !== noteName) {
                 voice.currentNote = noteName;
-                voice.oscillator.frequency.rampTo(targetFreq, 0.15, toneNow);
+                voice.oscillator.frequency.rampTo(targetFreq, 0.15, time);
                 voice.currentFreq = targetFreq;
             }
         });
@@ -135,9 +149,9 @@ export class AmbientDrone {
     /**
      * Set global volume of the drone layer
      */
-    setVolume(volume: number, rampTime: number = 0.5) {
+    setVolume(volume: number, rampTime: number = 0.5, time: number) {
         if (this.isDisposed) return;
-        this.masterGain.gain.rampTo(volume, rampTime);
+        this.masterGain.gain.rampTo(volume, rampTime, time);
     }
 
     /**
@@ -173,7 +187,7 @@ export class AmbientDrone {
      * @param noteName The note to focus on (e.g., 'C')
      * @param focusIntensity How much to boost (0-1), default 0.7
      */
-    focusOnNote(noteName: string, focusIntensity: number = 0.7) {
+    focusOnNote(noteName: string, focusIntensity: number = 0.7, time: number) {
         if (this.isDisposed || !this.isStarted) return;
 
         const now = Tone.now();
@@ -182,28 +196,28 @@ export class AmbientDrone {
         this.voices.forEach((voice, i) => {
             if (voice.currentNote?.startsWith(noteName)) {
                 const boostGain = 0.25 + focusIntensity * 0.2;
-                voice.gain.gain.rampTo(boostGain, 0.3, now);
+                voice.gain.gain.rampTo(boostGain, 0.3, time);
                 foundFocusNote = true;
             } else {
                 const positionMultiplier = i < 2 ? 0.6 : 0.25;
                 const reducedGain = positionMultiplier * 0.1 * (1 - focusIntensity * 0.3);
-                voice.gain.gain.rampTo(reducedGain, 0.3, now);
+                voice.gain.gain.rampTo(reducedGain, 0.3, time);
             }
         });
 
         if (!foundFocusNote) {
-            this.masterGain.gain.rampTo(0.25, 0.3, now);
+            this.masterGain.gain.rampTo(0.25, 0.3, time);
         }
     }
 
     /**
      * Clear focus - return to normal gain distribution
      */
-    clearFocus() {
+    clearFocus(time: number) {
         if (this.isDisposed || !this.isStarted) return;
 
         const now = Tone.now();
-        this.masterGain.gain.rampTo(0.2, 0.3, now);
+        this.masterGain.gain.rampTo(0.2, 0.3, time);
     }
 
     /**
@@ -226,6 +240,7 @@ export class AmbientDrone {
         this.dryGain.dispose();
         this.sendGain.dispose();
         this.masterGain.dispose();
+        this.saturator.dispose();
         this.limiter.dispose();
         this.voices = [];
     }
