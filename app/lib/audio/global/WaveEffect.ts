@@ -11,6 +11,7 @@
 import * as Tone from 'tone';
 import * as THREE from 'three';
 import { createSpatialPanner, updatePannerPosition } from '../core/SpatialAudio';
+import { AudioConfig } from '../core/AudioConfig';
 
 export class WaveEffect {
     private player: Tone.Player;
@@ -60,11 +61,11 @@ export class WaveEffect {
         // Pulse Gain (Envelope control)
         this.pulseGain = new Tone.Gain(this.BASE_VOLUME);
 
-        // Local reverb (Placed AFTER pulseGain so tail rings out naturally)
+        // Local reverb - Dynamic via AudioConfig
         this.reverb = new Tone.Reverb({
             decay: 7,
             preDelay: 0.12,
-            wet: 0.85
+            wet: AudioConfig.mix.wave.reverbSend
         });
         this.reverb.generate(); // Pre-compute IR
 

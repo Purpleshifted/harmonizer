@@ -98,10 +98,15 @@ export function AudioWalkthrough() {
             setIsLoading(true);
             try {
                 // Preload heavy assets
-                await Promise.all([preloadInstruments(), preloadReverbs()]);
+                console.log('[AudioWalkthrough] Preloading assets...');
+                const waveSample = new Tone.ToneAudioBuffer();
+                const wavePromise = waveSample.load('/samples/wave/843316__loredenii__stereo-waterfall-recording-natural-audio-for-audiovisual-productions.wav');
+
+                await Promise.all([preloadInstruments(), preloadReverbs(), wavePromise]);
+
                 if (mounted) {
                     setAreSamplesLoaded(true);
-                    console.log('[AudioWalkthrough] All samples preloaded.');
+                    console.log('[AudioWalkthrough] All samples preloaded (including Wave).');
                 }
             } catch (err) {
                 console.error('Failed to preload audio assets:', err);
@@ -140,6 +145,19 @@ export function AudioWalkthrough() {
                 <fog attach="fog" args={['#030303', 5, 70]} />
                 <ambientLight intensity={0.1} />
 
+                {/* Stable Audio Engine & Controls (Must not remount on state change) */}
+                <AudioController isAudioReady={isAudioReady && areSamplesLoaded} detectionRef={detectionRef} />
+                <PointerLockControls
+                    onLock={() => {
+                        console.log('[AudioWalkthrough] Pointer Locked -> AudioReady=true');
+                        setIsAudioReady(true);
+                    }}
+                    onUnlock={() => {
+                        console.log('[AudioWalkthrough] Pointer Unlocked -> AudioReady NOT CHANGED');
+                        // Intentionally do NOT set AudioReady=false to prevent engine tear-down
+                    }}
+                />
+
                 {/* Legacy Visuals */}
                 <InfiniteGridSystem
                     setLocationInfo={handleLocationUpdate}
@@ -170,21 +188,12 @@ export function AudioWalkthrough() {
                     <Bloom luminanceThreshold={1.2} mipmapBlur intensity={1.5} radius={0.6} />
                 </EffectComposer>
 
-                {/* Audio Engine */}
-                <AudioController isAudioReady={isAudioReady && areSamplesLoaded} detectionRef={detectionRef} />
-
                 <CameraController
                     forward={forward}
                     backward={backward}
                     left={left}
                     right={right}
                     heightBoost={heightBoost}
-                />
-
-                <PointerLockControls
-                    selector="#play-button"
-                    onUnlock={() => setIsAudioReady(false)}
-                    onLock={() => setIsAudioReady(true)}
                 />
             </Canvas>
 

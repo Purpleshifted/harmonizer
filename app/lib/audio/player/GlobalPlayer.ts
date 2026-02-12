@@ -2,6 +2,7 @@ import * as Tone from 'tone';
 import * as THREE from 'three';
 import { AmbientDrone } from '../global/AmbientDrone';
 import { WaveEffect } from '../global/WaveEffect';
+import { AudioConfig } from '../core/AudioConfig';
 
 /**
  * GlobalPlayer - Coordinates AmbientDrone and WaveEffect
@@ -33,8 +34,11 @@ export class GlobalPlayer {
 
     public setVolumes(ambientVol: number, waveVol: number) {
         if (this.isDisposed) return;
-        this.ambientDrone.setVolume(ambientVol, 0.5);
-        this.waveEffect.setVolume(waveVol, 1.0);
+        const profile = AudioConfig.transitions.global;
+
+        // Use profile timings from AudioConfig
+        this.ambientDrone.setVolume(ambientVol, profile.ambient);
+        this.waveEffect.setVolume(waveVol, profile.wave);
     }
 
     public focusOnNode(noteName: string, intensity: number = 0.6) {

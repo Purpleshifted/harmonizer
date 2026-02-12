@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import { ArpeggiatorPlayer } from '../edge/ArpeggiatorPlayer';
+import { AudioConfig } from '../core/AudioConfig';
 
 export class EdgePlayer {
     private arpeggiator: ArpeggiatorPlayer;
@@ -38,8 +39,11 @@ export class EdgePlayer {
 
     public setVolume(volume: number, rampTime: number = 0.1) {
         if (this.isDisposed) return;
+        const profile = AudioConfig.transitions.edge;
 
-        this.arpeggiator.setGlobalVolume(volume, rampTime);
+        // Apply specific EDGE master transition time if fading out
+        const effectiveRamp = volume < 0.01 ? profile.master : rampTime;
+        this.arpeggiator.setGlobalVolume(volume, effectiveRamp);
 
         if (volume > 0.001) {
             this.isAudible = true;
@@ -55,7 +59,7 @@ export class EdgePlayer {
                 if (!this.isAudible && !this.isDisposed) {
                     this.arpeggiator.stop();
                 }
-            }, rampTime * 1000 + 200);
+            }, effectiveRamp * 1000 + 200);
         }
     }
 

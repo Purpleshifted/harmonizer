@@ -15,6 +15,7 @@ export class CenterSynthLayer {
             envelope: { attack: 1.5, decay: 1.0, sustain: 0.7, release: 1.5 },
             volume: -20
         });
+        this.synth.maxPolyphony = 8;
 
         this.synth.connect(this.filter);
         this.filter.connect(this.outputFader.gain);

@@ -105,9 +105,9 @@ export function ActiveHighlight({ mode, activeNodes, isMajor }: ActiveHighlightP
         hlFaceOpacity: { value: getInitialValue('hlFaceOpacity', 0.02), min: 0, max: 0.1, label: 'Face Opacity' },
         hlPulseSpeed: { value: getInitialValue('hlPulseSpeed', 2.0), min: 0.5, max: 8, label: 'Pulse Speed' },
         hlFadeSpeed: { value: getInitialValue('hlFadeSpeed', 4.0), min: 1, max: 10, label: 'Fade Speed' },
-        hlMajorColor: { value: getInitialValue('hlMajorColor', '#dac175ff'), label: 'Major' },
-        hlMinorColor: { value: getInitialValue('hlMinorColor', '#6e91d6ff'), label: 'Minor' },
-        hlNeutralColor: { value: getInitialValue('hlNeutralColor', '#dbd5d5ff'), label: 'Neutral' },
+        hlMajorColor: { value: getInitialValue('hlMajorColor', '#dac175'), label: 'Major' },
+        hlMinorColor: { value: getInitialValue('hlMinorColor', '#6e91d6'), label: 'Minor' },
+        hlNeutralColor: { value: getInitialValue('hlNeutralColor', '#dbd5d5'), label: 'Neutral' },
     });
 
     // Glow texture (generated once)
@@ -221,9 +221,9 @@ export function ActiveHighlight({ mode, activeNodes, isMajor }: ActiveHighlightP
         smoothMajorRef.current = THREE.MathUtils.lerp(smoothMajorRef.current, targetMajor, delta * 1.2);
         smoothNeutralRef.current = THREE.MathUtils.lerp(smoothNeutralRef.current, targetNeutral, delta * 1.2);
 
-        const majorCol = new THREE.Color(hlMajorColor);
-        const minorCol = new THREE.Color(hlMinorColor);
-        const neutralCol = new THREE.Color(hlNeutralColor);
+        const majorCol = new THREE.Color(hlMajorColor.slice(0, 7));
+        const minorCol = new THREE.Color(hlMinorColor.slice(0, 7));
+        const neutralCol = new THREE.Color(hlNeutralColor.slice(0, 7));
         const modeColor = new THREE.Color().lerpColors(minorCol, majorCol, smoothMajorRef.current);
         const finalColor = new THREE.Color().lerpColors(modeColor, neutralCol, smoothNeutralRef.current);
 

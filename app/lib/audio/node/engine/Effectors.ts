@@ -4,6 +4,7 @@
  */
 
 import * as Tone from 'tone';
+import { AudioConfig } from '../../core/AudioConfig';
 
 export class Effector {
     public readonly filter: Tone.Filter;
@@ -39,9 +40,10 @@ export class Effector {
         // 2. Volume Control (Master logic for this player)
         this.volume = new Tone.Volume(-10);
 
-        // 3. Output Split (Dry / Wet)
-        this.dryGain = new Tone.Gain(0.5).toDestination();
-        this.sendGain = new Tone.Gain(0.5).connect(this.deepReverb);
+        // 3. Output Split (Dry / Wet) - Linked to AudioConfig
+        const deepSend = AudioConfig.mix.focus.deepSend;
+        this.dryGain = new Tone.Gain(1 - deepSend).toDestination();
+        this.sendGain = new Tone.Gain(deepSend).connect(this.deepReverb);
 
         // Direct Input (Bypass Filter) -> Volume
         this.directInput = new Tone.Gain(1.0);

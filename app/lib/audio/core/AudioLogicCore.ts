@@ -80,34 +80,15 @@ export class AudioLogicCore {
         this.lastMode = mode;
         this.lastStructureKey = structureKey;
 
-        // 4. Calculate Volumes (Crossfading)
+        // 4. Calculate Volumes (Delegated to Config)
+        const calculatedMix = AudioConfig.calculateVolumes(mode, distanceToCenter);
         const mix = {
-            droneVolume: 0,
-            chordVolume: 0,
-            arpVolume: 0,
-            focusVolume: 0,
-            waveVolume: 0
+            droneVolume: calculatedMix.drone,
+            chordVolume: calculatedMix.chord,
+            arpVolume: calculatedMix.arp,
+            focusVolume: calculatedMix.focus,
+            waveVolume: calculatedMix.wave
         };
-
-        switch (mode) {
-            case 'face':
-                mix.droneVolume = AudioConfig.mix.drone.volume * (0.4 + 0.6 * distanceToCenter);
-                mix.chordVolume = Tone.dbToGain(AudioConfig.mix.chord.baseVolume) * (1 - distanceToCenter * 0.5);
-                mix.waveVolume = 0;
-                break;
-
-            case 'edge':
-                mix.droneVolume = AudioConfig.mix.drone.volume * 0.8; // Louder Ambient in Edge mode
-                mix.arpVolume = Tone.dbToGain(AudioConfig.mix.arp.volume);
-                mix.waveVolume = AudioConfig.mix.wave.maxVolume * 0.2;
-                break;
-
-            case 'node':
-                mix.droneVolume = AudioConfig.mix.drone.volume * 0.2;
-                mix.focusVolume = Tone.dbToGain(AudioConfig.mix.focus.volume);
-                mix.waveVolume = AudioConfig.mix.wave.maxVolume * 0.5;
-                break;
-        }
 
         // 5. Arp Pattern Logic
         let arpPattern;

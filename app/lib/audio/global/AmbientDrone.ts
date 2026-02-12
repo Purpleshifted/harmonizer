@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { noteToFreq, ensureOctave } from '../core/NoteUtils';
 import { createSpatialPanner, updatePannerPosition, updateListener } from '../core/SpatialAudio';
 import { createReverb } from '../core/ReverbFactory';
+import { AudioConfig } from '../core/AudioConfig';
 
 interface NoteVoice {
     oscillator: Tone.Oscillator;
@@ -38,9 +39,10 @@ export class AmbientDrone {
         this.masterGain = new Tone.Gain(0.2); // Removed connection to limiter (will go to split)
         this.reverb = sharedReverb;
 
-        // Split Architecture for Shared Reverb (Wet=0.25, Dry=0.75)
-        this.dryGain = new Tone.Gain(0.75).connect(this.limiter);
-        this.sendGain = new Tone.Gain(0.25).connect(this.reverb);
+        // Split Architecture for Shared Reverb - Dynamic via AudioConfig
+        const reverbSend = AudioConfig.mix.drone.reverbSend;
+        this.dryGain = new Tone.Gain(1 - reverbSend).connect(this.limiter);
+        this.sendGain = new Tone.Gain(reverbSend).connect(this.reverb);
 
         this.masterGain.connect(this.dryGain);
         this.masterGain.connect(this.sendGain);

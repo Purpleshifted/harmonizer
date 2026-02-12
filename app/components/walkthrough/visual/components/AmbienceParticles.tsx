@@ -44,9 +44,9 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
         dustSizeJitter: { value: getInitialValue('dustSizeJitter', 0.6), min: 0, max: 1, label: '🎲 Size Jitter' },
         dustHueJitter: { value: getInitialValue('dustHueJitter', 0.1), min: 0, max: 1, label: '🎲 Hue Jitter' },
         dustOpacityJitter: { value: getInitialValue('dustOpacityJitter', 0.5), min: 0, max: 1, label: '🎲 Opacity Jitter' },
-        dustMajorBloomColor: { value: getInitialValue('dustMajorBloomColor', '#e8c36eff'), label: 'Major Color' },
-        dustMinorBloomColor: { value: getInitialValue('dustMinorBloomColor', '#71acecff'), label: 'Minor Color' },
-        dustNeutralBloomColor: { value: getInitialValue('dustNeutralBloomColor', '#ececece8'), label: 'Neutral Color' },
+        dustMajorBloomColor: { value: getInitialValue('dustMajorBloomColor', '#e8c36e'), label: 'Major Color' },
+        dustMinorBloomColor: { value: getInitialValue('dustMinorBloomColor', '#71acec'), label: 'Minor Color' },
+        dustNeutralBloomColor: { value: getInitialValue('dustNeutralBloomColor', '#ececec'), label: 'Neutral Color' },
     });
 
     // 1. Static Random Buffer (Split for easier attribute mapping)
@@ -206,9 +206,9 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
         dm.uniforms.uHueJitter.value = dustHueJitter;
         dm.uniforms.uOpacityJitter.value = dustOpacityJitter;
 
-        dm.uniforms.uMajorColor.value.set(dustMajorBloomColor);
-        dm.uniforms.uMinorColor.value.set(dustMinorBloomColor);
-        dm.uniforms.uNeutralColor.value.set(dustNeutralBloomColor);
+        dm.uniforms.uMajorColor.value.set(dustMajorBloomColor.slice(0, 7));
+        dm.uniforms.uMinorColor.value.set(dustMinorBloomColor.slice(0, 7));
+        dm.uniforms.uNeutralColor.value.set(dustNeutralBloomColor.slice(0, 7));
         dm.uniforms.uSmoothMajor.value = smoothMajorRef.current;
         dm.uniforms.uSmoothNeutral.value = smoothNeutralRef.current;
     });

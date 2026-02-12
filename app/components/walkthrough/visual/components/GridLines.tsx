@@ -44,9 +44,9 @@ export function GridLines({ isMajor }: GridLinesProps) {
         edgeBloomIntensity: { value: getInitialValue('edgeBloomIntensity', 5.0), min: 0.5, max: 8.0, label: '🔆 Bloom Power' },
         edgeColorStart: { value: getInitialValue('edgeColorStart', 30), min: 0, max: 150, label: '🎨 Color Start' },
         edgeColorFade: { value: getInitialValue('edgeColorFade', 10), min: 0, max: 150, label: '🎨 Color Fade' },
-        edgeMajorBloomColor: { value: getInitialValue('edgeMajorBloomColor', '#ece2bcff'), label: 'Major Color' },
-        edgeMinorBloomColor: { value: getInitialValue('edgeMinorBloomColor', '#b9d4eaff'), label: 'Minor Color' },
-        edgeNeutralBloomColor: { value: getInitialValue('edgeNeutralBloomColor', '#eee9eaff'), label: 'Neutral Color' },
+        edgeMajorBloomColor: { value: getInitialValue('edgeMajorBloomColor', '#ece2bc'), label: 'Major Color' },
+        edgeMinorBloomColor: { value: getInitialValue('edgeMinorBloomColor', '#b9d4ea'), label: 'Minor Color' },
+        edgeNeutralBloomColor: { value: getInitialValue('edgeNeutralBloomColor', '#eee9ea'), label: 'Neutral Color' },
     });
 
     const TOTAL_EDGES = TOTAL_INSTANCES * 3;
@@ -173,9 +173,9 @@ export function GridLines({ isMajor }: GridLinesProps) {
         uniforms.uColorStartRadius.value = edgeColorStart;
         uniforms.uColorFadeLength.value = edgeColorFade;
 
-        uniforms.uMajorColor.value.set(edgeMajorBloomColor);
-        uniforms.uMinorColor.value.set(edgeMinorBloomColor);
-        uniforms.uNeutralColor.value.set(edgeNeutralBloomColor);
+        uniforms.uMajorColor.value.set(edgeMajorBloomColor.slice(0, 7));
+        uniforms.uMinorColor.value.set(edgeMinorBloomColor.slice(0, 7));
+        uniforms.uNeutralColor.value.set(edgeNeutralBloomColor.slice(0, 7));
         uniforms.uSmoothMajor.value = smoothMajorRef.current;
         uniforms.uSmoothNeutral.value = smoothNeutralRef.current;
         uniforms.uFogFar.value = 200.0;

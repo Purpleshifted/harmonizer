@@ -1,7 +1,8 @@
 import * as Tone from 'tone';
 import * as THREE from 'three';
 import { ensureOctave } from '../core/NoteUtils';
-import { BaseLayer } from '../face/layers/BaseLayer';
+import { AudioConfig } from '../core/AudioConfig';
+import { BaseLayer } from '../face/layers/StringsLayer';
 import { HornLayer } from '../face/layers/HornLayer';
 import { CenterSynthLayer } from '../face/layers/CenterSynthLayer';
 import { AstralArpLayer } from '../face/layers/AstralArpLayer';
@@ -38,7 +39,7 @@ export class FacePlayer {
     // Throttling / Loop
     private lastTriggerTime = 0;
     private reTriggerIntervalId: ReturnType<typeof setInterval> | null = null;
-    readonly RE_TRIGGER_INTERVAL = 6000;
+    readonly RE_TRIGGER_INTERVAL = AudioConfig.timing.reTriggerInterval;
 
     constructor(spatialReverb: Tone.Reverb, deepReverb: Tone.Reverb) {
         // Connect to Destination (controlled by masterGain)
@@ -48,19 +49,21 @@ export class FacePlayer {
         this.vibratoSpatial = new Tone.Vibrato({ frequency: 3, depth: 0.08, type: 'sine' });
         this.vibratoDeep = new Tone.Vibrato({ frequency: 3, depth: 0.08, type: 'sine' });
 
-        // Routing Chains
-        this.spatialDry = new Tone.Gain(0.6).connect(this.masterGain);
-        this.spatialSend = new Tone.Gain(0.4).connect(spatialReverb);
+        const config = AudioConfig.mix.chord;
+
+        // Routing Chains - Dynamically linked to AudioConfig
+        this.spatialDry = new Tone.Gain(1 - config.reverbSend).connect(this.masterGain);
+        this.spatialSend = new Tone.Gain(config.reverbSend).connect(spatialReverb);
         this.vibratoSpatial.connect(this.spatialDry);
         this.vibratoSpatial.connect(this.spatialSend);
 
-        this.centerDry = new Tone.Gain(0.2).connect(this.masterGain);
-        this.centerSend = new Tone.Gain(0.8).connect(deepReverb);
+        this.centerDry = new Tone.Gain(1 - config.deepSend).connect(this.masterGain);
+        this.centerSend = new Tone.Gain(config.deepSend).connect(deepReverb);
         this.vibratoDeep.connect(this.centerDry);
         this.vibratoDeep.connect(this.centerSend);
 
-        this.astralDry = new Tone.Gain(0.2).connect(this.masterGain);
-        this.astralSend = new Tone.Gain(0.8).connect(deepReverb);
+        this.astralDry = new Tone.Gain(1 - config.deepSend).connect(this.masterGain);
+        this.astralSend = new Tone.Gain(config.deepSend).connect(deepReverb);
 
         // Instantiate Layers from face/layers/
         this.baseLayer = new BaseLayer(this.vibratoSpatial);
@@ -101,7 +104,11 @@ export class FacePlayer {
     public setVolume(volume: number, bgScale: number, rampTime: number = 0.1) {
         if (this.isDisposed) return;
         const now = Tone.now();
-        this.masterGain.gain.rampTo(volume, rampTime, now);
+        const profile = AudioConfig.transitions.face;
+
+        // Use the profile's master fade time when fading out
+        const effectiveMasterRamp = volume < 0.01 ? profile.master : rampTime;
+        this.masterGain.gain.rampTo(volume, effectiveMasterRamp, now);
 
         if (volume > 0.001) {
             this.isAudible = true;
@@ -110,19 +117,20 @@ export class FacePlayer {
         } else {
             this.isAudible = false;
             if (volume === 0) {
+                // Wait for the longest duration in the face profile
                 setTimeout(() => {
                     if (!this.isAudible && !this.isDisposed) {
                         this.stopSoundGeneration();
                         this.isPlaying = false;
                     }
-                }, rampTime * 1000 + 100);
+                }, profile.horns * 1000 + 100);
             }
         }
 
-        // Set layer-specific volume scales
-        this.baseLayer.setVolume(bgScale, rampTime);
-        this.centerSynth.setVolume(bgScale, rampTime);
-        this.astralArp.setVolume(bgScale, rampTime);
+        // --- LAYER-SPECIFIC FADE TIMES FROM PROFILE ---
+        this.baseLayer.setVolume(bgScale, profile.strings);
+        this.centerSynth.setVolume(bgScale, profile.strings);
+        this.astralArp.setVolume(bgScale, profile.astral);
     }
 
     private startLoop() {

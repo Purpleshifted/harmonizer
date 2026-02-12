@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { Effector } from '../node/engine/Effectors';
 import { CentorTone } from '../node/layers/CentorTone';
 import { SurroundingTones } from '../node/layers/SurroundingTones';
+import { AudioConfig } from '../core/AudioConfig';
 
 export class NodePlayer {
     private effector: Effector;
@@ -67,9 +68,11 @@ export class NodePlayer {
 
     public setVolume(volume: number, rampTime: number = 0.1) {
         if (this.isDisposed) return;
+        const profile = AudioConfig.transitions.node;
 
-        // Master Volume Control via Effector
-        this.effector.setOutputVolume(volume, rampTime);
+        // Apply specific NODE master transition time (focus) if fading out
+        const effectiveRamp = volume < 0.01 ? profile.master : rampTime;
+        this.effector.setOutputVolume(volume, effectiveRamp);
 
         if (volume > 0.001) {
             this.isAudible = true;
@@ -89,7 +92,7 @@ export class NodePlayer {
                 if (!this.isAudible && !this.isDisposed) {
                     this.stop();
                 }
-            }, rampTime * 1000 + 200);
+            }, effectiveRamp * 1000 + 200);
         }
     }
 

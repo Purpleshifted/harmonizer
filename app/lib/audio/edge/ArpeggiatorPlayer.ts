@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { ensureOctave } from '../core/NoteUtils';
 import { createSpatialPanner, updatePannerPosition } from '../core/SpatialAudio';
 import { createReverb, createDelay } from '../core/ReverbFactory';
+import { AudioConfig } from '../core/AudioConfig';
 
 interface IndependentVoice {
     synth: Tone.Synth;  // Monophonic synth for each voice (no PolySynth overhead)
@@ -72,15 +73,11 @@ export class ArpeggiatorPlayer {
 
         this.delay = createDelay('8n.', 0.25, 0.3);
 
-        // Split Architecture
-        // 1. Dry Path (0.6)
-        this.dryGain = new Tone.Gain(0.6).connect(this.masterGain);
-
-        // 2. Spatial Send (0.4)
-        this.spatialSend = new Tone.Gain(0.4).connect(this.spatialReverb);
-
-        // 3. Deep Send (0.1) - Ambient Tail
-        this.deepSend = new Tone.Gain(0.1).connect(this.deepReverb);
+        // Split Architecture - Linked to AudioConfig
+        const config = AudioConfig.mix.arp;
+        this.dryGain = new Tone.Gain(1 - config.spatialSend - config.deepSend).connect(this.masterGain);
+        this.spatialSend = new Tone.Gain(config.spatialSend).connect(this.spatialReverb);
+        this.deepSend = new Tone.Gain(config.deepSend).connect(this.deepReverb);
 
         // Chain
         this.filter.connect(this.delay);

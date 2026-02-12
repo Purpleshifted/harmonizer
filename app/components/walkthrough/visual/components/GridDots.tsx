@@ -48,9 +48,9 @@ export function GridDots({ setLocationInfo, onDetectionUpdate, isMajor }: GridDo
         dotSize: { value: getInitialValue('dotSize', 0.25), min: 0.02, max: 2.0 },
         dotOpacity: { value: getInitialValue('dotOpacity', 0.8), min: 0, max: 1 },
         nodeBaseEmissive: { value: getInitialValue('nodeBaseEmissive', 1.2), min: 0.1, max: 15, label: '✨ Base Glow' },
-        nodeMajorBloomColor: { value: getInitialValue('nodeMajorBloomColor', '#ffe28aff') },
-        nodeMinorBloomColor: { value: getInitialValue('nodeMinorBloomColor', '#98c0ffff') },
-        nodeNeutralBloomColor: { value: getInitialValue('nodeNeutralBloomColor', '#b8b8b8e9'), label: 'Neutral' },
+        nodeMajorBloomColor: { value: getInitialValue('nodeMajorBloomColor', '#ffe28a') },
+        nodeMinorBloomColor: { value: getInitialValue('nodeMinorBloomColor', '#98c0ff') },
+        nodeNeutralBloomColor: { value: getInitialValue('nodeNeutralBloomColor', '#b8b8b8'), label: 'Neutral' },
         nodeBloomStart: { value: getInitialValue('nodeBloomStart', 30), min: 0, max: 150, label: '🔆 Start' },
         nodeBloomFade: { value: getInitialValue('nodeBloomFade', 20), min: 0, max: 150, label: '🔆 Fade' },
         nodeBloomIntensity: { value: getInitialValue('nodeBloomIntensity', 5.0), min: 1, max: 8, label: '🔆 Power' },
@@ -175,9 +175,9 @@ export function GridDots({ setLocationInfo, onDetectionUpdate, isMajor }: GridDo
         dm.uniforms.uColorStartRadius.value = nodeColorStart;
         dm.uniforms.uColorFadeLength.value = nodeColorFade;
 
-        dm.uniforms.uMajorColor.value.set(nodeMajorBloomColor);
-        dm.uniforms.uMinorColor.value.set(nodeMinorBloomColor);
-        dm.uniforms.uNeutralColor.value.set(nodeNeutralBloomColor);
+        dm.uniforms.uMajorColor.value.set(nodeMajorBloomColor.slice(0, 7));
+        dm.uniforms.uMinorColor.value.set(nodeMinorBloomColor.slice(0, 7));
+        dm.uniforms.uNeutralColor.value.set(nodeNeutralBloomColor.slice(0, 7));
         dm.uniforms.uSmoothMajor.value = smoothMajorRef.current;
         dm.uniforms.uSmoothNeutral.value = smoothNeutralRef.current;
         dm.uniforms.uSize.value = dotSize;

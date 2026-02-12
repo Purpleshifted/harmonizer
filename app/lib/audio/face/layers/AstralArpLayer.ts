@@ -16,6 +16,7 @@ export class AstralArpLayer {
         this.delay = createDelay("4n.", 0.4, 0.5);
         this.filter = new Tone.Filter({ type: 'highpass', frequency: 600 });
         this.synth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, volume: 2 });
+        this.synth.maxPolyphony = 12;
 
         this.synth.connect(this.filter);
         this.filter.connect(this.delay);
