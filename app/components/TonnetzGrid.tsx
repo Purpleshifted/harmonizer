@@ -5,7 +5,7 @@ import { Canvas, useThree } from '@react-three/fiber';
 // We use Html from drei for crisp, non-WebGL text that doesn't crash the context
 import { Html, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { generateGridChunk, GridNode } from '../lib/tonnetz';
+import { generateGridChunk, GridNode } from '../lib/tonnetz/tonnetz';
 
 // Spacing between nodes
 const SPACING = 2.0;

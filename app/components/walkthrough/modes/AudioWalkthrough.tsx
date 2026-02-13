@@ -8,23 +8,23 @@ import * as THREE from 'three';
 import * as Tone from 'tone';
 
 // Centralized lib
-import { CAMERA_HEIGHT } from '../../../lib/tonnetz-grid';
+import { CAMERA_HEIGHT } from '../../../lib/tonnetz/tonnetz-grid';
 
 // Shared hooks (Level 4: shared/hooks)
 import { usePlayerControls } from '../shared/hooks/usePlayerControls';
 import { DetectionResult } from '../shared/hooks/useSpatialDetection';
 
-// Legacy Visuals (Level 4: legacy/visual)
-import { InfiniteGridSystem } from '../../../legacy/visual/InfiniteGridSystem';
-import { GlowingGrid } from '../../../legacy/visual/GlowingGrid';
-import { FloatingSpheres } from '../../../legacy/visual/FloatingSpheres';
-import { ActiveHighlight } from '../../../legacy/visual/ActiveHighlight';
-import { NodeLabels } from '../../../legacy/visual/NodeLabels';
+// Legacy Visuals (legacy/ at project root)
+import { InfiniteGridSystem } from '../../../../legacy/components/walkthrough/visual/InfiniteGridSystem';
+import { GlowingGrid } from '../../../../legacy/components/walkthrough/visual/GlowingGrid';
+import { FloatingSpheres } from '../../../../legacy/components/walkthrough/visual/FloatingSpheres';
+import { ActiveHighlight } from '../../../../legacy/components/walkthrough/visual/ActiveHighlight';
+import { NodeLabels } from '../../../../legacy/components/walkthrough/visual/NodeLabels';
 
 // Shared audio
 import { AudioController } from '../shared/audio/AudioController';
-import { preloadInstruments } from '../../../lib/audio/face/factory/InstrumentFactory';
-import { preloadReverbs } from '../../../lib/audio/core/ReverbFactory';
+import { preloadInstruments } from '../../../lib/audio/sources/InstrumentFactory';
+import { preloadReverbs } from '../../../lib/audio/engine/ReverbFactory';
 
 // Utilities
 import { useThree, useFrame } from '@react-three/fiber';

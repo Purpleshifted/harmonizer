@@ -5,7 +5,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useControls } from 'leva';
 import { type NodeCandidate } from '../../shared/hooks/useSpatialDetection';
-import { getAdjacentNodes, getNodeWorldPosition } from '../../../../lib/tonnetz-grid';
+import { getAdjacentNodes, getNodeWorldPosition } from '../../../../lib/tonnetz/tonnetz-grid';
 import { getInitialValue } from '../core/Persistence';
 import { useWaveConfigContext, getWaveHeight } from '../core/WaveSystem';
 import { WAVE_UNIFORMS, WAVE_VERTEX_CHUNK } from '../shaders/wave.glsl';

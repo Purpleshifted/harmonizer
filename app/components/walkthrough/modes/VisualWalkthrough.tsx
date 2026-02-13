@@ -6,7 +6,7 @@ import { PointerLockControls } from '@react-three/drei';
 import * as THREE from 'three';
 
 // Centralized lib
-import { CAMERA_HEIGHT } from '../../../lib/tonnetz-grid';
+import { CAMERA_HEIGHT } from '../../../lib/tonnetz/tonnetz-grid';
 
 // Shared hooks
 import { usePlayerControls } from '../shared/hooks/usePlayerControls';

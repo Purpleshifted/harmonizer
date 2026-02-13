@@ -59,7 +59,7 @@ export interface WaveConfig {
 import { useRef, useMemo, createContext, useContext } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { getInitialValue } from './Persistence';
-import { getNodeWorldPosition } from '../../../../lib/tonnetz-grid';
+import { getNodeWorldPosition } from '../../../../../app/lib/tonnetz/tonnetz-grid';
 
 export const WaveConfigContext = createContext<WaveConfig | null>(null);
 

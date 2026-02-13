@@ -32,8 +32,14 @@ export function AudioManager({ children }: AudioManagerProps) {
         initRef.current = true;
 
         try {
+            // Create AudioContext with latencyHint BEFORE Tone.start() (Web Audio uses it at construction time)
+            const ctx = new (typeof window !== 'undefined' ? window.AudioContext : (globalThis as any).AudioContext)({
+                latencyHint: 'playback',
+                sampleRate: 44100,
+            });
+            Tone.setContext(new Tone.Context(ctx));
             await Tone.start();
-            console.log('Audio context started');
+            console.log('Audio context started with latencyHint: playback');
             setIsReady(true);
         } catch (err) {
             console.error('Failed to start audio context:', err);

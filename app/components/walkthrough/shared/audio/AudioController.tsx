@@ -4,7 +4,7 @@ import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as Tone from 'tone';
 import { useControls, folder } from 'leva';
-import { Orchestrator } from '../../../../lib/audio/core/Orchestrator';
+import { Orchestrator } from '../../../../lib/audio/conductor/Orchestrator';
 import { DetectionResult } from '../hooks/useSpatialDetection';
 
 interface AudioControllerProps {
@@ -45,8 +45,10 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
 
         return () => {
             console.log('[AudioController] Detaching Orchestrator...');
-            orchestratorRef.current?.dispose();
-            orchestratorRef.current = null;
+            if (orchestratorRef.current) {
+                orchestratorRef.current.dispose();
+                orchestratorRef.current = null;
+            }
         };
     }, [isAudioReady]);
 

@@ -3,14 +3,14 @@
 import { useRef, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { getTone, classifyTriad } from '../../../../lib/tonnetz';
+import { getTone, classifyTriad } from '../../../../lib/tonnetz/tonnetz';
 import {
     getNodeWorldPosition,
     getWorldToGrid,
     getNearestTriangles,
     SPACING,
     type TriangleInfo,
-} from '../../../../lib/tonnetz-grid';
+} from '../../../../lib/tonnetz/tonnetz-grid';
 
 export type InteractionMode = 'node' | 'edge' | 'face';
 

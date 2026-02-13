@@ -4,7 +4,7 @@ import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useControls } from 'leva';
-import { getNodeWorldPosition, getWorldToGrid } from '../../../../lib/tonnetz-grid';
+import { getNodeWorldPosition, getWorldToGrid } from '../../../../lib/tonnetz/tonnetz-grid';
 
 const VIEW_RADIUS = 100;
 const GRID_SIZE = VIEW_RADIUS * 2 + 1;

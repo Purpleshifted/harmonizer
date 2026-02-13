@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import * as Tone from 'tone';
 
 // Centralized lib
-import { CAMERA_HEIGHT } from '../../../lib/tonnetz-grid';
+import { CAMERA_HEIGHT } from '../../../lib/tonnetz/tonnetz-grid';
 
 // Shared hooks
 import { usePlayerControls } from '../shared/hooks/usePlayerControls';
@@ -19,8 +19,8 @@ import { VisualElements } from '../visual/components/VisualElements';
 
 // Audio
 import { AudioController } from '../shared/audio/AudioController';
-import { preloadInstruments } from '../../../lib/audio/face/factory/InstrumentFactory';
-import { preloadReverbs } from '../../../lib/audio/core/ReverbFactory';
+import { preloadInstruments } from '../../../lib/audio/sources/InstrumentFactory';
+import { preloadReverbs } from '../../../lib/audio/engine/ReverbFactory';
 
 interface UnifiedSceneLogicProps {
     detection: DetectionResult | null;

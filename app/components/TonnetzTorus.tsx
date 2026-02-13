@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Text, Stars, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
-import { generateGridChunk, GridNode } from '../lib/tonnetz';
+import { generateGridChunk, GridNode } from '../lib/tonnetz/tonnetz';
 
 // Torus Dimensions
 const MAJOR_RADIUS = 10; // Distance from center to tube center

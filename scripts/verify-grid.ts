@@ -1,4 +1,4 @@
-import { getTone, generateGridChunk } from '../app/lib/tonnetz';
+import { getTone, generateGridChunk } from '../app/lib/tonnetz/tonnetz';
 
 console.log("Verifying Tonnetz Grid Logic...");
 
