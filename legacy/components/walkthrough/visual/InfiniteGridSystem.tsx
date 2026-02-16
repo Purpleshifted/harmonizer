@@ -22,13 +22,15 @@ interface InfiniteGridSystemProps {
     setLocationInfo: (info: string, type: string) => void;
     onDetectionUpdate?: (result: DetectionResult) => void;
     detectionRef?: React.MutableRefObject<DetectionResult | null>;
+    /** When true, always run detection for smoother visuals while moving */
+    isMoving?: boolean;
 }
 
 /**
  * Main grid system with nodes and spatial detection
  * Manages instanced mesh for nodes and provides detection results
  */
-export function InfiniteGridSystem({ setLocationInfo, onDetectionUpdate, detectionRef }: InfiniteGridSystemProps) {
+export function InfiniteGridSystem({ setLocationInfo, onDetectionUpdate, detectionRef, isMoving = false }: InfiniteGridSystemProps) {
     const { camera } = useThree();
     const meshRef = useRef<THREE.InstancedMesh>(null);
     const materialRef = useRef<THREE.MeshStandardMaterial>(null);
@@ -61,6 +63,7 @@ export function InfiniteGridSystem({ setLocationInfo, onDetectionUpdate, detecti
 
     // Unified Spatial Detection Hook
     const internalDetectionRef = useSpatialDetection({
+        isMoving,
         onDetectionUpdate: (res) => {
             if (onDetectionUpdate) onDetectionUpdate(res);
             setLocationInfo(res.displayInfo, res.displayType);
@@ -71,8 +74,8 @@ export function InfiniteGridSystem({ setLocationInfo, onDetectionUpdate, detecti
         if (!meshRef.current || !materialRef.current) return;
         const playerPos = camera.position;
 
-        // Layer 1 Optimization: Skip if camera hasn't moved significantly
-        if (playerPos.distanceToSquared(lastCameraPos.current) < 0.0001) {
+        // Skip grid updates when idle and camera hasn't moved; when moving, always run for smooth visuals
+        if (!isMoving && playerPos.distanceToSquared(lastCameraPos.current) < 0.0001) {
             return;
         }
         lastCameraPos.current.copy(playerPos);

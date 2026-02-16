@@ -11,6 +11,7 @@ import { CAMERA_HEIGHT } from '../../../lib/tonnetz/tonnetz-grid';
 
 // Shared hooks
 import { usePlayerControls } from '../shared/hooks/usePlayerControls';
+import { useKeyHoldDuration } from '../shared/hooks/useKeyHoldDuration';
 import { useSpatialDetection, DetectionResult } from '../shared/hooks/useSpatialDetection';
 
 // Visual Components
@@ -21,6 +22,7 @@ import { VisualElements } from '../visual/components/VisualElements';
 import { AudioController } from '../shared/audio/AudioController';
 import { preloadInstruments } from '../../../lib/audio/sources/InstrumentFactory';
 import { preloadReverbs } from '../../../lib/audio/engine/ReverbFactory';
+import { preloadWaveBuffer } from '../../../lib/audio/sources/WaveBufferCache';
 
 interface UnifiedSceneLogicProps {
     detection: DetectionResult | null;
@@ -91,14 +93,17 @@ interface SceneContentProps {
 function SceneContent({ onLocationUpdate, isAudioReady, setIsAudioReady }: SceneContentProps) {
     const [detection, setDetection] = useState<DetectionResult | null>(null);
 
+    const { forward, backward, left, right } = usePlayerControls();
+    const isMoving = forward || backward || left || right;
+    const keyHoldSecRef = useKeyHoldDuration(isMoving);
+
     const detectionRef = useSpatialDetection({
+        isMoving,
         onDetectionUpdate: (res) => {
             setDetection(res);
             onLocationUpdate(res.displayInfo, res.displayType);
         }
     });
-
-    const { forward, backward, left, right } = usePlayerControls();
 
     return (
         <>
@@ -114,7 +119,7 @@ function SceneContent({ onLocationUpdate, isAudioReady, setIsAudioReady }: Scene
                 />
             </WaveSystem>
 
-            <AudioController isAudioReady={isAudioReady} detectionRef={detectionRef} />
+            <AudioController isAudioReady={isAudioReady} detectionRef={detectionRef} keyHoldSecRef={keyHoldSecRef} isMoving={isMoving} />
 
             <PointerLockControls
                 selector="#play-button"
@@ -149,7 +154,7 @@ export function UnifiedWalkthrough() {
             }
             await Tone.start();
             console.log('Audio context started');
-            await Promise.all([preloadInstruments(), preloadReverbs()]);
+            await Promise.all([preloadInstruments(), preloadReverbs(), preloadWaveBuffer()]);
             setAreSamplesLoaded(true);
             setIsAudioReady(true);
         } catch (err) {

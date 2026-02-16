@@ -3,12 +3,14 @@
  */
 import * as Tone from 'tone';
 import { createReverb } from './ReverbFactory';
+import { RotationSpatializer } from './RotationSpatializer';
 
 export class BusSystem {
     public readonly ambientBus: Tone.Reverb;
     public readonly spatialBus: Tone.Reverb;
     public readonly deepBus: Tone.Reverb;  // Long tail for Astral/Drones
     public readonly waveBus: Tone.Reverb;  // Lush IR-like for environment
+    public readonly waveSpatializer: RotationSpatializer;  // Reverb → spatializer → destination
     public readonly masterBus: Tone.Gain;
     private readonly masterLimiter: Tone.Limiter;
 
@@ -26,9 +28,12 @@ export class BusSystem {
         this.deepBus.wet.value = 1.0;
         this.deepBus.toDestination();
 
+        // Wave: reverb first, then rotation-based spatializer (no HRTF)
         this.waveBus = createReverb('wave');
         this.waveBus.wet.value = 1.0;
-        this.waveBus.toDestination();
+        this.waveSpatializer = new RotationSpatializer();
+        this.waveBus.connect(this.waveSpatializer);
+        this.waveSpatializer.connect(Tone.getDestination());
 
         // Master Limiter to prevent clipping
         this.masterLimiter = new Tone.Limiter(-1.5).toDestination();
@@ -40,6 +45,7 @@ export class BusSystem {
         this.spatialBus.dispose();
         this.deepBus.dispose();
         this.waveBus.dispose();
+        this.waveSpatializer.dispose();
         this.masterBus.dispose();
         this.masterLimiter.dispose();
     }

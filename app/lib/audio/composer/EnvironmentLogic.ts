@@ -32,10 +32,10 @@ export class EnvironmentLogic {
             const progress = cyclePos / config.duration;
             const curve = Math.pow(Math.sin(progress * Math.PI), 1.5);
 
-            // Calibrated multipliers for subtle vs occasional strong
-            let peakMultiplier = isStrong ? 1.5 : 0.4;
+            // Calibrated multipliers for subtle vs occasional strong (more distant/ethereal)
+            let peakMultiplier = isStrong ? 0.4 : 0.12;
             let radiusApproach = isStrong ? 18 : 8;
-            let brightnessPeak = isStrong ? 3000 : 800;
+            let brightnessPeak = isStrong ? 1800 : 500;
 
             radius = 36 - (curve * radiusApproach);
             intensity = config.baseVolume + (curve * peakMultiplier);

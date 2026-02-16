@@ -25,6 +25,7 @@ import { NodeLabels } from '../../../../legacy/components/walkthrough/visual/Nod
 import { AudioController } from '../shared/audio/AudioController';
 import { preloadInstruments } from '../../../lib/audio/sources/InstrumentFactory';
 import { preloadReverbs } from '../../../lib/audio/engine/ReverbFactory';
+import { preloadWaveBuffer } from '../../../lib/audio/sources/WaveBufferCache';
 
 // Utilities
 import { useThree, useFrame } from '@react-three/fiber';
@@ -102,7 +103,7 @@ export function AudioWalkthrough() {
                 const waveSample = new Tone.ToneAudioBuffer();
                 const wavePromise = waveSample.load('/samples/wave/843316__loredenii__stereo-waterfall-recording-natural-audio-for-audiovisual-productions.wav');
 
-                await Promise.all([preloadInstruments(), preloadReverbs(), wavePromise]);
+                await Promise.all([preloadInstruments(), preloadReverbs(), preloadWaveBuffer(), wavePromise]);
 
                 if (mounted) {
                     setAreSamplesLoaded(true);
@@ -146,7 +147,7 @@ export function AudioWalkthrough() {
                 <ambientLight intensity={0.1} />
 
                 {/* Stable Audio Engine & Controls (Must not remount on state change) */}
-                <AudioController isAudioReady={isAudioReady && areSamplesLoaded} detectionRef={detectionRef} />
+                <AudioController isAudioReady={isAudioReady && areSamplesLoaded} detectionRef={detectionRef} isMoving={forward || backward || left || right} />
                 <PointerLockControls
                     onLock={() => {
                         console.log('[AudioWalkthrough] Pointer Locked -> AudioReady=true');
@@ -163,6 +164,7 @@ export function AudioWalkthrough() {
                     setLocationInfo={handleLocationUpdate}
                     onDetectionUpdate={handleDetectionUpdate}
                     detectionRef={detectionRef}
+                    isMoving={forward || backward || left || right}
                 />
                 <GlowingGrid />
                 <NodeLabels />

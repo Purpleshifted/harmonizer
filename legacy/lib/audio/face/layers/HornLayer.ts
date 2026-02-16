@@ -2,16 +2,13 @@ import * as Tone from 'tone';
 import * as THREE from 'three';
 import { ensureOctave } from '../../../../../app/lib/audio/utils/NoteUtils';
 import { createSpatialPanner, updatePannerPosition } from '../../../../../app/lib/audio/utils/SpatialAudio';
-import { SeamRemover } from '../../../../../app/lib/audio/engine/SeamRemover';
 import { Fader } from '../../../../../app/lib/audio/engine/Fader';
 import { loadInstrument } from '../../../../../app/lib/audio/sources/InstrumentFactory';
 
 class HornVoice {
     private spatializer: Tone.Panner3D;
     private fader: Fader;
-    private samplerA: Tone.Sampler;
-    private samplerB: Tone.Sampler;
-    private seamRemover: SeamRemover;
+    private sampler: Tone.Sampler;
     private readonly zeroVector = new THREE.Vector3();
 
     public currentNote: string | null = null;
@@ -20,17 +17,12 @@ class HornVoice {
     constructor(destination: Tone.ToneAudioNode) {
         this.spatializer = createSpatialPanner({ useHRTF: false, refDistance: 2, maxDistance: 30 });
         this.fader = new Fader(0);
-        this.samplerA = loadInstrument('french-horn');
-        this.samplerB = loadInstrument('french-horn');
-        this.samplerA.volume.value = -2;
-        this.samplerB.volume.value = -2;
+        this.sampler = loadInstrument('french-horn');
+        this.sampler.volume.value = -2;
 
-        this.samplerA.connect(this.spatializer);
-        this.samplerB.connect(this.spatializer);
+        this.sampler.connect(this.spatializer);
         this.spatializer.connect(this.fader.gain);
         this.fader.connect(destination);
-
-        this.seamRemover = new SeamRemover(this.samplerA, this.samplerB);
     }
 
     public activate(note: string, pos: THREE.Vector3, time: number) {
@@ -39,8 +31,8 @@ class HornVoice {
         updatePannerPosition(this.spatializer, pos, 0);
 
         const hornNote = ensureOctave(note, 3);
-        if (this.samplerA.loaded) {
-            this.samplerA.triggerAttack(hornNote, time, 0.8);
+        if (this.sampler.loaded) {
+            this.sampler.triggerAttack(hornNote, time, 0.8);
         }
 
         this.fader.rampTo(0.6, 2.0, time);
@@ -52,24 +44,21 @@ class HornVoice {
         this.currentNote = null;
         this.fader.rampTo(0, 4.0, time);
 
-        // USE Tone.getContext().setTimeout for better accuracy across threads
         (Tone.getContext() as any).setTimeout(() => {
-            if (!this.isAllocated && note) {
-                this.seamRemover.releaseAll(ensureOctave(note, 3), Tone.now());
+            if (!this.isAllocated && note && this.sampler.loaded) {
+                this.sampler.triggerRelease(ensureOctave(note, 3), Tone.now());
             }
-        }, 4.2); // Context timeout uses seconds
+        }, 4.2);
     }
 
-    public sustainLoop(time: number) {
-        if (!this.isAllocated || !this.currentNote) return;
-        this.seamRemover.sustainOverlap(ensureOctave(this.currentNote, 3), time, 0.6);
+    public sustainLoop(_time: number) {
+        // Legacy: no crossfade; note sustains until release
     }
 
     public dispose() {
         this.spatializer.dispose();
         this.fader.dispose();
-        this.samplerA.dispose();
-        this.samplerB.dispose();
+        this.sampler.dispose();
     }
 }
 

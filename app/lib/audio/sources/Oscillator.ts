@@ -49,16 +49,16 @@ export const BELL_SYNTH_CONFIG = {
 
 export const NOISE_WASH_CONFIG = {
     noise: { type: 'pink' as const, playbackRate: 0.5 },
-    envelope: { attack: 0.5, decay: 2, sustain: 0, release: 2 },
-    volume: -10
+    envelope: { attack: 0.5, decay: 4, sustain: 0.2, release: 2 },
+    volume: -7
 };
 
 export const NODE_SYNTH_CONFIG = {
-    oscillator: { type: 'fatsawtooth' as const, count: 3, spread: 30 },
-    envelope: { attack: 2.0, decay: 1.0, sustain: 1.0, release: 1.5 },
-    volume: -4,
-    filter: { frequency: 400, Q: 1, type: 'lowpass' as const },
-    lfo: { frequency: 0.02, min: 300, max: 800, type: 'sine' as const }
+    oscillator: { type: 'fatsawtooth' as const, count: 3, spread: 3 },
+    envelope: { attack: 2.0, decay: 3.0, sustain: 1.0, release: 1.5 },
+    volume: -5,
+    filter: { frequency: 150, Q: 1.5, type: 'lowpass' as const },
+    lfo: { frequency: 0.07, min: 200, max: 800, type: 'sine' as const }
 };
 
 export const ASTRAL_ARP_CONFIG = {

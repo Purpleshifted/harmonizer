@@ -83,14 +83,15 @@ interface SceneContentProps {
 function SceneContent({ onLocationUpdate }: SceneContentProps) {
     const [detection, setDetection] = useState<DetectionResult | null>(null);
 
+    const { forward, backward, left, right } = usePlayerControls();
+
     useSpatialDetection({
+        isMoving: forward || backward || left || right,
         onDetectionUpdate: (res) => {
             setDetection(res);
             onLocationUpdate(res.displayInfo, res.displayType);
         }
     });
-
-    const { forward, backward, left, right } = usePlayerControls();
 
     return (
         <WaveSystem>

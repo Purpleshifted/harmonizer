@@ -37,13 +37,13 @@ export function createSpatialPanner(options?: SpatialPannerOptions): Tone.Panner
 
 /**
  * Update panner position with smooth ramping
- * OPTIMIZATION: Skips update if position change is below threshold
+ * OPTIMIZATION: Skips update if position change is below threshold (reduces automation buildup)
  */
 export function updatePannerPosition(
     panner: Tone.Panner3D,
     position: THREE.Vector3,
     rampTime = 0.1,
-    threshold = 0.05 // Skip if movement is less than this
+    threshold = 0.08 // Skip if movement is less than this
 ): void {
     // Check if position change is significant
     const dx = panner.positionX.value - position.x;

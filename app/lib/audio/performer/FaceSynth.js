@@ -8,7 +8,7 @@ import { FACE_SYNTH_CONFIG } from '../sources/Oscillator';
 export class FaceSynth {
     constructor(ports) {
         this.synth = new Tone.PolySynth(Tone.Synth, FACE_SYNTH_CONFIG);
-        this.synth.maxPolyphony = 8;
+        this.synth.maxPolyphony = 24;
         this.filter = new Tone.Filter({ type: 'lowpass', frequency: 1500, rolloff: -12 });
         this.gain = new Tone.Gain(0.3);
 

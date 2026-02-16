@@ -29,8 +29,11 @@ class DroneVoice {
 
     update(cmd) {
         updatePannerPosition(this.panner, cmd.position, 0.1);
-        this.gain.gain.rampTo(cmd.gain, 0.2, cmd.time);
-        this.oscillator.frequency.rampTo(cmd.frequency, 0.15, cmd.time);
+        const now = cmd.time ?? Tone.now();
+        const gainDiff = Math.abs(this.gain.gain.value - cmd.gain);
+        const freqDiff = Math.abs(this.oscillator.frequency.value - cmd.frequency);
+        if (gainDiff > 0.02) this.gain.gain.rampTo(cmd.gain, 0.2, now);
+        if (freqDiff > 0.5) this.oscillator.frequency.rampTo(cmd.frequency, 0.15, now);
 
         if (!this.isPlaying) {
             this.oscillator.start();

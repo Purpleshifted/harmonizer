@@ -63,10 +63,17 @@ export function noteToMidi(note: string): number {
 }
 
 /**
- * Sort notes by pitch (low to high)
+ * Sort notes by pitch (low to high) - uses MIDI number for accurate ordering
  */
 export function sortNotesByPitch(notes: string[]): string[] {
     return [...notes].sort((a, b) => noteToMidi(a) - noteToMidi(b));
+}
+
+/**
+ * Sort notes by MIDI descending (high to low)
+ */
+export function sortNotesByPitchDesc(notes: string[]): string[] {
+    return [...notes].sort((a, b) => noteToMidi(b) - noteToMidi(a));
 }
 
 /**

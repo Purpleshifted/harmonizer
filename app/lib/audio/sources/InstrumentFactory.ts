@@ -59,10 +59,17 @@ export async function preloadInstruments(): Promise<void> {
     return preloadPromise;
 }
 
+export interface SamplerOverrides {
+    attack?: number;
+    release?: number;
+    /** Per-instrument start delay (sec) for staggered attacks */
+    staggerSeconds?: number;
+}
+
 /**
  * Load a single instrument sampler using CACHED buffers
  */
-export function loadInstrument(name: InstrumentName): Tone.Sampler {
+export function loadInstrument(name: InstrumentName, overrides?: SamplerOverrides): Tone.Sampler {
     const baseUrl = `/samples/${name}/`;
     const sampleMap = SAMPLE_MAPS[name];
 
@@ -80,8 +87,8 @@ export function loadInstrument(name: InstrumentName): Tone.Sampler {
     }
 
     const samplerOptions: Partial<Tone.SamplerOptions> = {
-        release: 8.0, // Increased from 4.0 for lush tails
-        attack: 2.5,
+        release: overrides?.release ?? 8.0,
+        attack: overrides?.attack ?? 2.5,
         curve: 'exponential',
         urls: urls,
     };
@@ -102,22 +109,24 @@ export interface OrchestraEnsemble {
     triggerAttack: (note: string | string[], time?: Tone.Unit.Time, velocity?: number) => void;
     triggerRelease: (note: string | string[], time?: Tone.Unit.Time) => void;
     triggerAttackRelease: (note: string | string[], duration: Tone.Unit.Time, time?: Tone.Unit.Time, velocity?: number) => void;
-    releaseAll: () => void;
+    releaseAll: (time?: Tone.Unit.Time) => void;
     connect: (destination: Tone.InputNode) => void;
     dispose: () => void;
 }
 
 export function createOrchestraEnsemble(
     instruments: InstrumentName[],
-    volumes: number[] = []
+    volumes: number[] = [],
+    samplerOverrides?: SamplerOverrides
 ): OrchestraEnsemble {
     const samplers = instruments.map((name, i) => {
-        const sampler = loadInstrument(name);
+        const sampler = loadInstrument(name, samplerOverrides);
         sampler.volume.value = volumes[i] ?? -6;
         return sampler;
     });
 
     const ranges = instruments.map(name => INSTRUMENT_RANGES[name]);
+    const stagger = samplerOverrides?.staggerSeconds ?? 0;
 
     function getClampedNote(note: string, index: number): string {
         const range = ranges[index];
@@ -140,7 +149,8 @@ export function createOrchestraEnsemble(
         triggerAttack(note, time, velocity = 0.8) {
             if (!this.isLoaded) return;
             samplers.forEach((s, i) => {
-                s.triggerAttack(processNotes(note, i), time, velocity);
+                const t = typeof time === 'number' ? time + i * stagger : time;
+                s.triggerAttack(processNotes(note, i), t, velocity);
             });
         },
 
@@ -157,8 +167,8 @@ export function createOrchestraEnsemble(
             });
         },
 
-        releaseAll() {
-            samplers.forEach(s => s.releaseAll());
+        releaseAll(time?: Tone.Unit.Time) {
+            samplers.forEach(s => s.releaseAll(time));
         },
 
         connect(destination) {

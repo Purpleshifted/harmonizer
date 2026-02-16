@@ -10,6 +10,9 @@ import { DetectionResult } from '../hooks/useSpatialDetection';
 interface AudioControllerProps {
     isAudioReady: boolean;
     detectionRef: React.MutableRefObject<DetectionResult | null>;
+    keyHoldSecRef?: React.MutableRefObject<number>;
+    /** When true, enforce mode debounce to avoid flap at edge/node crossings during movement */
+    isMoving?: boolean;
 }
 
 /**
@@ -18,7 +21,7 @@ interface AudioControllerProps {
  * This component handles the lifecycle of the Orchestrator and bridges
  * UI state (Leva sliders, Camera) to the core audio engine.
  */
-export function AudioController({ isAudioReady, detectionRef }: AudioControllerProps) {
+export function AudioController({ isAudioReady, detectionRef, keyHoldSecRef, isMoving = false }: AudioControllerProps) {
     const { camera } = useThree();
     const orchestratorRef = useRef<Orchestrator | null>(null);
 
@@ -72,7 +75,8 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
         if (!isAudioReady || !detection || !orchestratorRef.current) return;
 
         // Delegate all coordination and spatial processing to Orchestrator
-        orchestratorRef.current.update(detection, camera, delta);
+        const keyHoldSec = keyHoldSecRef?.current ?? 0;
+        orchestratorRef.current.update(detection, camera, delta, keyHoldSec, isMoving);
     });
 
     return null;

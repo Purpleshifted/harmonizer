@@ -1,39 +1,44 @@
+import type { EdgeModeLogicPreset, FaceModeLogicPreset } from '../presets/ArpModeLogicPresets';
+import { EDGE_MODE_LOGIC_PRESET, FACE_MODE_LOGIC_PRESET } from '../presets/ArpModeLogicPresets';
+import { sortNotesByPitch, sortNotesByPitchDesc, transposeOctave } from '../utils/NoteUtils';
+
+export type PatternEvent = { note: string; velocity: number } | null;
+
 /**
  * PatternScore - Musical pattern generator for arpeggios.
- * Pure logic for determining rhythm and notes.
+ * Uses Mode Logic Presets (모드 로직 프리셋) for rhythm and note density.
  */
-
 export class PatternScore {
     /**
      * Generates arpeggio patterns with distance-based dynamics.
-     * @param distance Distance from player to the node. 
+     * Uses EdgeModeLogicPreset for patternLength, baseProbability, distanceInfluence.
      */
-    public genArpPattern(note: string, isEdge: boolean, distance: number = 10) {
-        const length = isEdge ? 8 : 16;
+    public genArpPattern(
+        note: string,
+        isEdge: boolean,
+        distance: number = 10,
+        preset: EdgeModeLogicPreset = EDGE_MODE_LOGIC_PRESET
+    ): PatternEvent[] {
+        const length = isEdge ? preset.patternLengthEdge : preset.patternLengthNeighbor;
 
-        // Intensity factor: Inverse relationship with distance (closer = 1, far = 0)
-        const intensity = Math.max(0, 1 - distance / 25);
+        const intensity = Math.max(0, 1 - distance / preset.distanceMax);
+        const baseProb = isEdge ? preset.baseProbabilityEdge : preset.baseProbabilityNeighbor;
+        const probability = baseProb * (1 - preset.distanceInfluence + preset.distanceInfluence * intensity);
 
-        // Probability: Frequency of notes (Closer = more notes)
-        const baseProb = isEdge ? 0.4 : 0.2;
-        const probability = baseProb * (0.3 + 0.7 * intensity);
+        const p: PatternEvent[] = [];
+        const velocityIntensity = Math.pow(intensity, preset.velocityDistanceExponent ?? 1);
+        const baseVel = isEdge ? preset.velocityBaseEdge : preset.velocityBaseNeighbor;
+        const velRange = isEdge ? preset.velocityRangeEdge : preset.velocityRangeNeighbor;
 
-        const p = [];
         for (let i = 0; i < length; i++) {
             if (Math.random() < probability) {
-                // Velocity: Loudness of notes (Closer = louder)
-                const baseVel = isEdge ? 0.4 : 0.25;
-                const velocity = (baseVel + 0.5 * intensity) + Math.random() * 0.2;
+                const velocity = (baseVel + velRange * velocityIntensity) + Math.random() * 0.2;
 
-                // For Edge notes, we occasionally jump octaves
                 let finalNote = note;
-                if (isEdge && Math.random() < 0.3) {
+                const octaveRatio = isEdge ? preset.octaveVariationRatioEdge : preset.octaveVariationRatioNeighbor;
+                if (Math.random() < octaveRatio) {
                     const octaveVar = Math.random() > 0.5 ? 1 : -1;
-                    const match = note.match(/(\d+)$/);
-                    if (match) {
-                        const currentOctave = parseInt(match[0]);
-                        finalNote = note.replace(/\d+$/, (currentOctave + octaveVar).toString());
-                    }
+                    finalNote = transposeOctave(note, octaveVar);
                 }
 
                 p.push({ note: finalNote, velocity });
@@ -45,23 +50,24 @@ export class PatternScore {
     }
 
     /**
-     * Astral Arpeggio Pattern (For Face mode)
-     * Creates a structured sweep pattern.
+     * Face Arpeggio Pattern - 해당 face의 세 음을 ascend(minor) 또는 descend(major).
+     * 기준: 옥타브 conform 후 MIDI 번호로 정렬. 한 줄 = 세 음 한 번씩만, 나머지 null.
+     * cycleIndex로 사이클마다 slot 배치 변경 (규칙에 맞게 새 패턴).
      */
-    public genAstralPattern(sortedNotes: string[], isMajor: boolean) {
-        const patternEvents = [];
-        const length = 16;
-
-        // Direction based on tonality
-        const notes = isMajor ? [...sortedNotes].reverse() : sortedNotes;
-
-        for (let i = 0; i < length; i++) {
-            if (Math.random() < 0.35) {
-                const idx = Math.floor((i / length) * notes.length);
-                patternEvents.push(notes[Math.min(idx, notes.length - 1)]);
-            } else {
-                patternEvents.push(null);
-            }
+    public genFaceArpPattern(
+        faceNotes: string[],
+        isMajor: boolean,
+        cycleIndex: number = 0,
+        preset: FaceModeLogicPreset = FACE_MODE_LOGIC_PRESET
+    ): (string | null)[] {
+        if (faceNotes.length === 0) return [];
+        const notes = isMajor ? sortNotesByPitchDesc(faceNotes) : sortNotesByPitch(faceNotes);
+        const patternEvents: (string | null)[] = new Array(preset.patternLength).fill(null);
+        const length = preset.patternLength;
+        const step = Math.max(1, Math.floor(length / notes.length));
+        for (let i = 0; i < notes.length; i++) {
+            const baseSlot = (i * step + cycleIndex) % length;
+            patternEvents[baseSlot] = notes[i];
         }
         return patternEvents;
     }
