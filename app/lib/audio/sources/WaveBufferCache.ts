@@ -21,7 +21,10 @@ let preloadPromise: Promise<CachedWave | null> | null = null;
  */
 export async function preloadWaveBuffer(): Promise<void> {
     if (cached) return;
-    if (preloadPromise) return preloadPromise as Promise<void>;
+    if (preloadPromise) {
+        await preloadPromise;
+        return;
+    }
 
     preloadPromise = (async (): Promise<CachedWave | null> => {
         try {

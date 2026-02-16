@@ -9,18 +9,6 @@ export default function WalkthroughSelectionPage() {
             <h1 className="text-4xl font-light mb-12 tracking-wider">Tonnetz Walkthrough Mode</h1>
 
             <div className="flex gap-8">
-                {/* Audio Mode Card */}
-                <Link href="/tonnetz/walkthrough/audio" className="group">
-                    <div className="w-64 h-80 border border-white/20 rounded-xl p-6 hover:bg-white/5 transition flex flex-col items-center justify-center">
-                        <div className="text-5xl mb-6 group-hover:scale-110 transition duration-300">🎵</div>
-                        <h2 className="text-2xl font-bold mb-4">Audio Mode</h2>
-                        <p className="text-sm text-center text-gray-400">
-                            Safe for testing sound.
-                            Original implementation.
-                        </p>
-                    </div>
-                </Link>
-
                 {/* Visual Sandbox Card */}
                 <Link href="/tonnetz/walkthrough/visual" className="group relative">
                     <div className="w-64 h-80 border border-blue-500/50 rounded-xl p-6 hover:bg-blue-900/10 transition flex flex-col items-center justify-center relative overflow-hidden">
