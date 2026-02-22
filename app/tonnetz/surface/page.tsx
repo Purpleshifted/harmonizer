@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 
 // Adjust import path up two levels
-const TonnetzGrid = dynamic(() => import('../../components/TonnetzGrid'), { ssr: false });
+const TonnetzGrid = dynamic(() => import('../../components/2d-grid/TonnetzGrid'), { ssr: false });
 
 export default function SurfacePage() {
     return (

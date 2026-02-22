@@ -186,7 +186,6 @@ export class AmbientDrone {
         this.masterGain.gain.rampTo(0.2, 0.3, now);
     }
 
-    /** Set master volume (e.g. 0 to mute when pointer lock released) */
     setGlobalVolume(volume: number, rampTime: number = 0.1) {
         if (this.isDisposed) return;
         const now = Tone.now();

@@ -5,7 +5,6 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { PointerLockControls, Stars } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
-import * as Tone from 'tone';
 import { useControls, Leva } from 'leva';
 
 import { CAMERA_HEIGHT } from './visual/core/ToneSystem';
@@ -18,7 +17,8 @@ import { NodeLabels } from './visual/components/NodeLabels';
 import { AmbienceParticles } from './visual/components/AmbienceParticles';
 import { ActiveHighlight } from './visual/components/ActiveHighlight';
 import { useWaveConfig, getWaveHeight, WaveConfig, WaveConfigContext } from './visual/core/WaveSystem';
-import { AudioController } from './visual/audio/AudioController';
+
+const NODE_MODE_HEIGHT_BOOST = 0;
 
 function CameraController({
     forward,
@@ -63,21 +63,17 @@ function SceneContent({
     onLocationUpdate,
     isLocked,
     onLockChange,
-    isAudioReady,
-    setIsAudioReady,
 }: {
     onLocationUpdate: (info: string, type: string) => void;
     isLocked: boolean;
     onLockChange: (locked: boolean) => void;
-    isAudioReady: boolean;
-    setIsAudioReady: (ready: boolean) => void;
 }) {
     const [detection, setDetection] = useState<DetectionResult | null>(null);
     const { forward, backward, left, right } = usePlayerControls();
     const controlsRef = useRef<any>(null);
     const waveConfig = useWaveConfig();
 
-    const detectionRef = useSpatialDetection({
+    useSpatialDetection({
         onDetectionUpdate: (result) => {
             setDetection(result);
             if (result.displayInfo) {
@@ -94,14 +90,8 @@ function SceneContent({
 
     useEffect(() => {
         if (!controlsRef.current) return;
-        const handleLock = () => {
-            onLockChange(true);
-            setIsAudioReady(true);
-        };
-        const handleUnlock = () => {
-            onLockChange(false);
-            setIsAudioReady(false);
-        };
+        const handleLock = () => onLockChange(true);
+        const handleUnlock = () => onLockChange(false);
         controlsRef.current.addEventListener('lock', handleLock);
         controlsRef.current.addEventListener('unlock', handleUnlock);
         return () => {
@@ -110,7 +100,7 @@ function SceneContent({
                 controlsRef.current.removeEventListener('unlock', handleUnlock);
             }
         };
-    }, [onLockChange, setIsAudioReady]);
+    }, [onLockChange]);
 
     return (
         <WaveConfigContext.Provider value={waveConfig}>
@@ -140,7 +130,6 @@ function SceneContent({
                     radius={bloomRadius}
                 />
             </EffectComposer>
-            <AudioController isAudioReady={isAudioReady} detectionRef={detectionRef} />
             <CameraController
                 forward={forward}
                 backward={backward}
@@ -149,37 +138,22 @@ function SceneContent({
                 waveConfig={waveConfig}
                 isLocked={isLocked}
             />
-            <PointerLockControls ref={controlsRef} selector="#play-button" />
+            <PointerLockControls ref={controlsRef} selector="#dummy-lock-target" />
         </WaveConfigContext.Provider>
     );
 }
 
 /**
- * Unified mode: visual/ (full sandbox) + audio/.
+ * Visual mode: full visual sandbox (GridDots, WaveSystem, Leva). No audio.
  */
-export default function TonnetzWalkthrough() {
+export default function VisualWalkthrough() {
     const [mounted, setMounted] = useState(false);
     const [locationInfo, setLocationInfo] = useState('...');
     const [locationType, setLocationType] = useState('Initializing');
     const [isLocked, setIsLocked] = useState(false);
-    const [isAudioReady, setIsAudioReady] = useState(false);
 
     useEffect(() => {
         setMounted(true);
-    }, []);
-
-    // Fallback safety: ensure ESC/pointer unlock always mutes audio.
-    useEffect(() => {
-        const onPointerLockChange = () => {
-            if (!document.pointerLockElement) {
-                setIsLocked(false);
-                setIsAudioReady(false);
-            }
-        };
-        document.addEventListener('pointerlockchange', onPointerLockChange);
-        return () => {
-            document.removeEventListener('pointerlockchange', onPointerLockChange);
-        };
     }, []);
 
     const handleLocationUpdate = useCallback((info: string, type: string) => {
@@ -193,21 +167,29 @@ export default function TonnetzWalkthrough() {
 
     useControls('Settings', useLevaPersistence());
 
-    const handleEnter = async () => {
-        try {
-            await Tone.start();
-            setIsAudioReady(true);
-            // Let PointerLockControls (selector="#play-button") request lock on the canvas; do not lock the button element.
-        } catch (err) {
-            console.error('Failed to start audio:', err);
-        }
+    const handleEnter = () => {
+        const dummy = document.getElementById('dummy-lock-target');
+        if (dummy) dummy.requestPointerLock();
     };
 
     if (!mounted) return null;
 
     return (
-        <div className="w-full h-screen bg-black relative">
+        <div id="canvas-container" className="w-full h-screen bg-black relative">
             <Leva collapsed={false} />
+            <div
+                id="dummy-lock-target"
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '10px',
+                    height: '10px',
+                    opacity: 0,
+                    pointerEvents: 'none',
+                    zIndex: -1,
+                }}
+            />
             <Canvas
                 camera={{ position: [0, CAMERA_HEIGHT, 5], fov: 60 }}
                 onCreated={({ gl }) => {
@@ -219,8 +201,6 @@ export default function TonnetzWalkthrough() {
                     onLocationUpdate={handleLocationUpdate}
                     isLocked={isLocked}
                     onLockChange={handleLockChange}
-                    isAudioReady={isAudioReady}
-                    setIsAudioReady={setIsAudioReady}
                 />
             </Canvas>
             <div className="absolute top-4 left-4 z-10 text-white pointer-events-none">
@@ -229,7 +209,7 @@ export default function TonnetzWalkthrough() {
                         {locationType}
                     </p>
                     <p className="text-2xl font-serif text-white">{locationInfo}</p>
-                    <p className="text-xs text-gray-400 mt-2">Unified (Visual + Audio)</p>
+                    <p className="text-xs text-gray-400 mt-2">Visual Sandbox Mode</p>
                 </div>
             </div>
             <div className="absolute top-4 left-4 z-20" style={{ transform: 'translateY(120px)' }}>
@@ -237,15 +217,24 @@ export default function TonnetzWalkthrough() {
                     ← Exit
                 </a>
             </div>
-            <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-20">
-                <div
-                    id="play-button"
-                    onClick={handleEnter}
-                    className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-full backdrop-blur border border-white/20 transition"
-                >
-                    Click to Enter
+            {!isLocked && (
+                <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+                    <button
+                        className="pointer-events-auto bg-black/30 hover:bg-black/50 border border-white/20 px-8 py-4 rounded-lg text-white text-lg transition-all shadow-lg"
+                        onClick={handleEnter}
+                    >
+                        Click to Enter
+                    </button>
+                    <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 text-white/50 text-sm">
+                        Adjust Leva settings anytime • Press Click to Enter to start
+                    </div>
                 </div>
-            </div>
+            )}
+            {isLocked && (
+                <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-20 text-white/50 text-sm pointer-events-none">
+                    WASD to Move • ESC to Release
+                </div>
+            )}
         </div>
     );
 }

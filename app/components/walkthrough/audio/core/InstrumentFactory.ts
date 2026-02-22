@@ -61,7 +61,13 @@ const INSTRUMENT_RANGES: Record<InstrumentName, { min: number, max: number }> = 
 };
 
 /**
- * Load a single instrument sampler
+ * Load a single instrument sampler.
+ *
+ * Voicing: Tone.Sampler is one instance per instrument (e.g. one contrabass). Each
+ * triggerAttack(note) adds one "voice" (one playing note). So one Sampler can have
+ * multiple simultaneous voices = polyphony. We avoid overflow by: (1) one note per
+ * chord per sampler in OrchestraEnsemble, (2) round-robin layers so each layer's
+ * samplers are releaseAll'd before that layer is triggered again.
  */
 export function loadInstrument(name: InstrumentName): Tone.Sampler {
     const baseUrl = `/samples/${name}/`;
@@ -70,8 +76,8 @@ export function loadInstrument(name: InstrumentName): Tone.Sampler {
     return new Tone.Sampler({
         urls: sampleMap,
         baseUrl,
-        release: 4.0, // Long release for overlaps
-        attack: 2.5,  // Much softer attack for orchestral swelling
+        release: 12.0, // Long tail for ambient fade-out (keep below maxPolyphony by layer discipline)
+        attack: 2.5,   // Softer attack for orchestral swelling
         curve: 'exponential',
     });
 }

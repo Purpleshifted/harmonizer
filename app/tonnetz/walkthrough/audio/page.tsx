@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import TonnetzWalkthrough from '../../../components/walkthrough/modes/audio/TonnetzWalkthrough';
+import AudioWalkthrough from '../../../components/walkthrough/AudioWalkthrough';
 
 export default function AudioModePage() {
-    return <TonnetzWalkthrough />;
+    return <AudioWalkthrough />;
 }

@@ -440,9 +440,7 @@ export class ChordPlayer {
         const now = Tone.now();
         const velocity = isLoop ? 0.6 : 0.8;
         const SWELL_TIME = 4.0;
-        const FADE_OUT_TIME = 14.0;  // Long fade so tail drags (ambient)
-        const SAMPLER_RELEASE_SEC = 12; // Match InstrumentFactory release; releaseAll after fade so tail completes
-        const releaseAllDelayMs = (FADE_OUT_TIME + SAMPLER_RELEASE_SEC) * 1000;
+        const FADE_OUT_TIME = 6.0;
 
         const nextLayer = this.baseLayers[this.currentLayerIndex];
 
@@ -456,14 +454,15 @@ export class ChordPlayer {
             nextLayer.ensemble.triggerAttack(notes, now, velocity);
         }
 
-        // 2. Fade out previous layer; releaseAll only after fade + release tail so polyphony stays bounded
-        const prevIdx = (this.currentLayerIndex + 1) % this.baseLayers.length;
+        // 2. Manage previous layers fading (The ones before the 'next' we just triggered)
+        const prevIdx = (this.currentLayerIndex + 1) % this.baseLayers.length; // The layer from 2 steps ago
         const oldLayer = this.baseLayers[prevIdx];
         if (oldLayer.ensemble.isLoaded) {
             oldLayer.gain.gain.setTargetAtTime(0, now, FADE_OUT_TIME / 3);
+            // Slowly release after fade-out to keep memory clean but avoid cuts
             setTimeout(() => {
                 if (!this.isDisposed) oldLayer.ensemble.releaseAll();
-            }, releaseAllDelayMs);
+            }, FADE_OUT_TIME * 1000);
         }
     }
 
@@ -479,7 +478,6 @@ export class ChordPlayer {
         });
     }
 
-    /** 기존 astral arp 톤/패턴을 그대로 사용 */
     public refreshAstralFromTriangle(notes: string[], isMajor: boolean) {
         this.updateAstralSequence(notes, isMajor);
     }

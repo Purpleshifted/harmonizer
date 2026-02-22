@@ -1,227 +1,119 @@
 /**
- * WaveEffect - Creates a rotating pink noise wave and transition effects
- * 
- * Modes:
- * - Idle: Rotating wave every 4 seconds (sharp attack, slow decay)
- * - Major transition: High-pass sweep up (bright fade out)
- * - Minor transition: Low-pass sweep down (dark fade out)
- * - Edge transition: Band-pass converge
- * 
- * Uses Convolution Reverb (IR) for realistic space simulation.
+ * WaveEffect - Worklet-based wave loop + reverb.
+ * 큰 파도 / 작은 파도 두 버전을 확률적으로 선택해 연산 (main thread에서 intensity/filterFreq 전달).
+ * Chain: WaveEffectWorklet → gain → reverb → destination.
  */
-
 import * as Tone from 'tone';
 import * as THREE from 'three';
-import { createSpatialPanner } from './core/SpatialAudio';
-import { ConvolutionReverb } from './core/ConvolutionReverb';
+import { createReverb } from './core/ReverbFactory';
+import { WaveEffectWorklet } from './worklets/WaveEffectWorklet';
 
 type WaveMode = 'major' | 'minor' | 'edge' | 'idle';
 
+/** 큰 파도: 긴 주기, 긴 구간, 높은 강도/필터 */
+const BIG_WAVE = { period: 6.0, duration: 2.2, intensityScale: 0.85, filterBase: 600, filterPeak: 2400 };
+/** 작은 파도: 짧은 주기, 짧은 구간, 낮은 강도/필터 */
+const SMALL_WAVE = { period: 3.0, duration: 0.9, intensityScale: 0.45, filterBase: 400, filterPeak: 1200 };
+
+const BIG_WAVE_PROBABILITY = 0.3;
+
 export class WaveEffect {
-    private noise: Tone.Noise;
-    private filter: Tone.Filter;
-    private panner: Tone.Panner3D;
-    private gain: Tone.Gain;
-    private convReverb: ConvolutionReverb;
-    private autoFilter: Tone.AutoFilter;
+    private worklet: WaveEffectWorklet;
+    private reverb: Tone.Reverb;
+    private masterGain: Tone.Gain;
 
-    // State
-    private isPlaying = false;
     private isDisposed = false;
-    private isReverbLoaded = false;
     private mode: WaveMode = 'idle';
-
-    // Wave pulse variables
     private time = 0;
     private waveCycle = 0;
-    private readonly WAVE_PERIOD = 6.0;   // Longer cycle for distant feel
-    private readonly WAVE_DURATION = 2.0; // Extended duration
-
-    // IR file path
-    private readonly IR_PATH = '/ir/1st-baptist-nashville/stereo/1st_baptist_nashville_far_wide.wav';
+    private currentWave: typeof BIG_WAVE | typeof SMALL_WAVE = SMALL_WAVE;
+    private waveDuration = SMALL_WAVE.duration;
+    private wavePeriod = SMALL_WAVE.period;
 
     constructor() {
-        // Pink noise source for "wave" sound
-        this.noise = new Tone.Noise('pink');
+        this.worklet = new WaveEffectWorklet();
+        this.reverb = createReverb('wave');
+        this.masterGain = new Tone.Gain(1);
 
-        // Main shaping filter
-        this.filter = new Tone.Filter({
-            type: 'lowpass',
-            frequency: 800,
-            Q: 1
-        });
-
-        // Flanger-like movement
-        this.autoFilter = new Tone.AutoFilter({
-            frequency: 1,
-            baseFrequency: 200,
-            octaves: 2.6
-        }).start();
-
-        // Spatial positioning (lighter CPU with equalpower)
-        this.panner = createSpatialPanner({
-            distanceModel: 'linear',
-            refDistance: 1,
-            maxDistance: 20,
-            useHRTF: false, // Reduce CPU load
-        });
-
-        // Convolution Reverb for realistic space (IR-based)
-        this.convReverb = new ConvolutionReverb(0.7);
-
-        this.gain = new Tone.Gain(0);
-
-        // Chain: Noise -> Filter -> AutoFilter -> Panner -> Gain -> ConvReverb -> Destination
-        this.noise.connect(this.filter);
-        this.filter.connect(this.autoFilter);
-        this.autoFilter.connect(this.panner);
-        this.panner.connect(this.gain);
-        this.gain.connect(this.convReverb.input);
-        this.convReverb.output.toDestination();
-
-        // Load IR asynchronously
-        this.loadIR();
-    }
-
-    private async loadIR() {
-        try {
-            await this.convReverb.load(this.IR_PATH);
-            this.isReverbLoaded = true;
-            console.log('[WaveEffect] IR loaded successfully');
-        } catch (error) {
-            console.warn('[WaveEffect] IR load failed, using dry signal:', error);
-            // Fallback: connect gain directly to destination
-            this.gain.disconnect();
-            this.gain.toDestination();
-        }
+        this.worklet.output.connect(this.masterGain);
+        this.masterGain.connect(this.reverb);
+        this.reverb.toDestination();
     }
 
     start() {
-        if (this.isDisposed || this.isPlaying) return;
-        this.noise.start();
-        this.isPlaying = true;
+        if (this.isDisposed) return;
+        this.worklet.start();
         this.mode = 'idle';
     }
 
-    /**
-     * Update loop for wave simulation
-     */
-    update(delta: number, centerPos: THREE.Vector3) {
-        if (!this.isPlaying || this.isDisposed) return;
+    setOutputGain(volume: number, rampTime: number = 0.1) {
+        if (this.isDisposed) return;
+        const now = Tone.now();
+        this.masterGain.gain.cancelScheduledValues(now);
+        this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+        this.masterGain.gain.rampTo(volume, rampTime, now);
+    }
+
+    update(delta: number, _centerPos: THREE.Vector3) {
+        if (this.isDisposed || !this.worklet.isPlaying) return;
 
         this.time += delta;
 
-        // Idle mode: Rotating wave effect
         if (this.mode === 'idle') {
             this.waveCycle += delta;
+            const cyclePos = this.waveCycle % this.wavePeriod;
 
-            const cyclePos = this.waveCycle % this.WAVE_PERIOD;
-
-            if (cyclePos < this.WAVE_DURATION) {
-                const progress = cyclePos / this.WAVE_DURATION;
-
-                // Smoother asymmetric curve: Slower attack (30%), gradual decay (70%)
+            if (cyclePos < this.waveDuration) {
+                const progress = cyclePos / this.waveDuration;
                 let volCurve: number;
                 if (progress < 0.3) {
-                    // Slower attack (30% duration)
-                    volCurve = Math.pow(progress / 0.3, 1.5); // Ease-in curve
+                    volCurve = Math.pow(progress / 0.3, 1.5);
                 } else {
-                    // Gradual decay (70% duration) - Softer exponential
                     volCurve = Math.pow(1 - (progress - 0.3) / 0.7, 1.5);
                 }
-
-                // Optimized: set panner once, use setTargetAtTime for smooth volume/filter
-                const volume = volCurve * 0.8;
-                const now = Tone.now();
-                this.gain.gain.setTargetAtTime(volume, now, 0.1);
-
-                const angle = progress * Math.PI * 2;
-                const radius = 5;
-                this.panner.positionX.value = centerPos.x + Math.cos(angle) * radius;
-                this.panner.positionZ.value = centerPos.z + Math.sin(angle) * radius;
-                this.panner.positionY.value = centerPos.y;
-
-                const targetFreq = 400 + volCurve * 2000;
-                this.filter.frequency.setTargetAtTime(targetFreq, now, 0.1);
+                const intensity = volCurve * this.currentWave.intensityScale;
+                const filterFreq = this.currentWave.filterBase + volCurve * (this.currentWave.filterPeak - this.currentWave.filterBase);
+                this.worklet.update(intensity, filterFreq, Tone.now());
             } else {
-                this.gain.gain.setTargetAtTime(0, Tone.now(), 0.5);
+                if (cyclePos - delta < this.waveDuration && cyclePos >= this.waveDuration) {
+                    this.currentWave = Math.random() < BIG_WAVE_PROBABILITY ? BIG_WAVE : SMALL_WAVE;
+                    this.waveDuration = this.currentWave.duration;
+                    this.wavePeriod = this.currentWave.period;
+                }
+                this.worklet.update(0, this.currentWave.filterBase, Tone.now());
             }
         }
     }
 
-    /**
-     * Trigger transition effect when leaving Node mode
-     */
     triggerTransition(toMode: 'face' | 'edge', isMajor?: boolean) {
-        if (!this.isPlaying) return;
+        if (this.isDisposed) return;
 
         const now = Tone.now();
         this.mode = toMode === 'face' ? (isMajor ? 'major' : 'minor') : 'edge';
 
-        // Swell envelope: Attack -> Release (Crash effect)
+        this.reverb.wet.value = 0.9;
+        this.worklet.update(0.6, isMajor ? 8000 : 400, now);
+
         const attackTime = 0.4;
         const releaseTime = 2.5;
-
-        // 1. Swell up (Attack)
-        this.gain.gain.cancelScheduledValues(now);
-        this.gain.gain.setValueAtTime(this.gain.gain.value, now);
-        this.gain.gain.linearRampTo(0.6, attackTime, now);
-
-        // 2. Fade out (Release)
-        this.gain.gain.exponentialRampTo(0.001, releaseTime, now + attackTime);
-
-        // Boost reverb wetness for transition
-        if (this.isReverbLoaded) {
-            this.convReverb.setWet(0.9);
-        }
-
-        if (this.mode === 'major') {
-            // Bright high-pass sweep
-            this.filter.type = 'highpass';
-            this.filter.frequency.setValueAtTime(400, now);
-            this.filter.frequency.exponentialRampTo(8000, attackTime + releaseTime * 0.5, now);
-            this.autoFilter.frequency.rampTo(8, attackTime);
-        } else if (this.mode === 'minor') {
-            // Dark low-pass sweep
-            this.filter.type = 'lowpass';
-            this.filter.frequency.setValueAtTime(2000, now);
-            this.filter.frequency.exponentialRampTo(50, attackTime + releaseTime, now);
-        } else { // Edge
-            // Band-pass converge
-            this.filter.type = 'bandpass';
-            this.filter.Q.value = 5;
-            this.filter.frequency.rampTo(440, attackTime + releaseTime * 0.5, now);
-        }
-
-        // Reset to idle after transition
         setTimeout(() => {
             if (this.isDisposed) return;
             this.mode = 'idle';
-            this.filter.type = 'lowpass';
-            this.filter.frequency.value = 800;
-            this.filter.Q.value = 1;
-            if (this.isReverbLoaded) {
-                this.convReverb.setWet(0.7);
-            }
-            this.gain.gain.value = 0;
+            this.reverb.wet.value = 0.7;
+            this.worklet.update(0, 800, Tone.now());
         }, (attackTime + releaseTime) * 1000 + 100);
     }
 
     stop() {
-        if (!this.isPlaying) return;
-        this.noise.stop();
-        this.gain.gain.value = 0;
-        this.isPlaying = false;
+        this.worklet.stop();
+        this.masterGain.gain.value = 0;
     }
 
     dispose() {
         this.isDisposed = true;
         this.stop();
-        this.noise.dispose();
-        this.filter.dispose();
-        this.autoFilter.dispose();
-        this.panner.dispose();
-        this.convReverb.dispose();
-        this.gain.dispose();
+        this.worklet.dispose();
+        this.reverb.dispose();
+        this.masterGain.dispose();
     }
 }

@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { ensureOctave } from './core/NoteUtils';
 import { createSpatialPanner, updatePannerPosition } from './core/SpatialAudio';
 import { createReverb, createDelay } from './core/ReverbFactory';
-import type { EdgeVoicePattern } from './arp/ArpPatternGenerator';
+import type { EdgeVoicePattern } from '../../audio/arp/ArpPatternGenerator';
 
 interface IndependentVoice {
     synth: Tone.Synth;  // Monophonic synth for each voice (no PolySynth overhead)
@@ -252,15 +252,10 @@ export class ArpeggiatorPlayer {
         return pattern;
     }
 
-    /**
-     * ArpEngine에서 생성한 패턴으로 엣지 보이스 설정 (패턴 생성은 코어에서만).
-     */
     setPatternFromEngine(voices: EdgeVoicePattern[]) {
         if (this.isDisposed) return;
-
         const now = Tone.now();
         this.currentEdgeKey = voices.length >= 2 ? `${voices[0].note}-${voices[1].note}` : '';
-
         for (let i = 0; i < this.MAX_VOICES; i++) {
             const voice = this.voices[i];
             if (i < voices.length) {
@@ -275,7 +270,6 @@ export class ArpeggiatorPlayer {
                 voice.gain.gain.rampTo(0, 0.5, now);
             }
         }
-
         this.masterGain.gain.rampTo(0.5, this.FADE_IN_TIME, now);
         if (Tone.getTransport().state !== 'started') Tone.getTransport().start();
         this.isPlaying = true;

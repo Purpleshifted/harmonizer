@@ -10,8 +10,8 @@ import { AmbientDrone } from './AmbientDrone';
 import { ChordPlayer } from './ChordPlayer';
 import { ArpeggiatorPlayer } from './ArpeggiatorPlayer';
 import { NodeFocusPad } from './NodeFocusPad';
-import { WaveEffect } from './WaveEffect';
-import { ArpEngine } from './arp/ArpEngine';
+import { WaveEffect } from '../../audio/WaveEffect';
+import { ArpEngine } from '../../audio/arp/ArpEngine';
 import { DetectionResult, NodeCandidate } from '../hooks/useSpatialDetection';
 import { updateListener } from './core/SpatialAudio';
 
@@ -32,7 +32,6 @@ interface AudioControllerProps {
  * - Horn update: Only on structure change
  * - Volume ramps: Only on mode change
  */
-/** 레이어별 ON/OFF – 버퍼링 줄이려면 아르페지에이터만 켜두고 나머지 끄기 */
 const LAYER_DEFAULTS = {
     ambientDrone: false,
     chordPlayer: false,
@@ -62,9 +61,7 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
     const lastModeRef = useRef<string | null>(null);
     const prevAudioStructureRef = useRef({ mode: '', nodeNames: '' });
     const playersInitializedRef = useRef(false);
-    const lastAudioReadyRef = useRef(true); // unmute arp only when transitioning to ready
 
-    // === Mode/structure debounce (ThresholdSketch: α control threshold) – reduces buffering on mode switch
     const MODE_DEBOUNCE_MS = 80;
     const stableDetectionRef = useRef<DetectionResult | null>(null);
     const pendingStableKeyRef = useRef<string>('');
@@ -105,7 +102,6 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
         };
     }, [isAudioReady]);
 
-    // When pointer lock is released (ESC), mute all players including ArpEngine node/face layers.
     useEffect(() => {
         if (isAudioReady) return;
         if (!playersInitializedRef.current) return;
@@ -115,10 +111,8 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
         arpeggiatorRef.current?.setGlobalVolume(0, t);
         focusPadRef.current?.setGlobalVolume(0, t);
         waveEffectRef.current?.setOutputGain(0, t);
-        arpEngineRef.current?.setMuted(true, t);
     }, [isAudioReady]);
 
-    // Dispose players only when leaving the page (unmount), not when pointer lock is released.
     useEffect(() => {
         return () => {
             arpEngineRef.current?.dispose();
@@ -137,25 +131,14 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
     }, []);
 
     useFrame((_, delta) => {
-        // Read directly from ref (High frequency, no re-render needed)
         const detection = detectionRef.current;
-
-        if (!isAudioReady) {
-            lastAudioReadyRef.current = false;
-            return;
-        }
-        if (lastAudioReadyRef.current === false) {
-            lastAudioReadyRef.current = true;
-            arpEngineRef.current?.setMuted(false, 0.15);
-        }
-        if (!detection) return;
+        if (!isAudioReady || !detection) return;
 
         const now = performance.now();
         const currentMode = detection.mode;
         const currentNodeNames = detection.activeNodes.map(n => n.note.name).sort().join('-');
         const currentKey = `${currentMode}-${currentNodeNames}`;
 
-        // Debounce (ThresholdSketch α): use committed detection for heavy updates after stable for MODE_DEBOUNCE_MS
         if (currentKey !== pendingStableKeyRef.current) {
             pendingStableKeyRef.current = currentKey;
             pendingStableSinceRef.current = now;
@@ -191,10 +174,12 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
             lastUpdatePosRef.current.copy(camera.position);
             lastUpdateForwardRef.current.copy(currentForward);
 
+            // 0.1 Update Listener (Projected to ground as requested)
             const listenerPos = new THREE.Vector3(camera.position.x, 0, camera.position.z);
-            const forward = currentForward;
+            const forward = currentForward; // Reuse the calculated direction
             updateListener(listenerPos, forward);
 
+            // 0.2 Update Ambient Drone
             if (layers['Ambient Drone'] && ambientDroneRef.current) {
                 const mapToAudioNode = (n: NodeCandidate) => ({
                     name: n.note.name,
@@ -214,7 +199,6 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
             }
         }
 
-        // Layer off → mute (no updates)
         if (ambientDroneRef.current) {
             ambientDroneRef.current.setGlobalVolume(layers['Ambient Drone'] ? 1 : 0, 0.15);
         }
@@ -227,12 +211,10 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
         const faceArpOn = layers['Chord (Face)'] || arpMasterOn;
         const nodeArpOn = layers['Node Focus Pad'] || arpMasterOn;
 
-        // === Chord (Face) ===
         if (chordPlayerRef.current) {
             if (!faceArpOn) {
                 chordPlayerRef.current.setGlobalVolume(0, 0.15);
             } else {
-                // Full face layer가 켜져 있을 때만 heavy layer(베이스/혼) 갱신
                 if (layers['Chord (Face)'] && stable.activeTriangle && structureChanged) {
                     chordPlayerRef.current.playChord(stable.activeTriangle.notes, stable.activeTriangle.positions, stable.activeTriangle.isMajor);
                 }
@@ -261,7 +243,6 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
             }
         }
 
-        // === Arp Engine + Arpeggiator / Node Focus Pad ===
         if (arpEngineRef.current) {
             arpEngineRef.current.update(currentMode as 'node' | 'edge' | 'face', stable);
         }
@@ -281,7 +262,6 @@ export function AudioController({ isAudioReady, detectionRef }: AudioControllerP
             }
         }
 
-        // === Wave Effect ===
         if (waveEffectRef.current) {
             if (!layers['Wave Effect']) {
                 waveEffectRef.current.setOutputGain(0, 0.15);
