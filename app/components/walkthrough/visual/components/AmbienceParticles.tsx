@@ -36,13 +36,13 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
         dustMinorBloomColor,
         dustNeutralBloomColor,
     } = useControls('Ambience', {
-        dustCount: { value: getInitialValue('dustCount', 800), min: 200, max: 10000 },
-        dustSize: { value: getInitialValue('dustSize', 0.5), min: 0.01, max: 1.0 },
+        dustCount: { value: getInitialValue('dustCount', 1200), min: 200, max: 10000 },
+        dustSize: { value: getInitialValue('dustSize', 0.3), min: 0.01, max: 1.0 },
         dustOpacity: { value: getInitialValue('dustOpacity', 0.6), min: 0, max: 1 },
-        dustSpeed: { value: getInitialValue('dustSpeed', 0.3), min: 0, max: 2 },
-        dustHeight: { value: getInitialValue('dustHeight', 80), min: 20, max: 200, label: '↕ Height Spread' },
+        dustSpeed: { value: getInitialValue('dustSpeed', 0.5), min: 0, max: 2 },
+        dustHeight: { value: getInitialValue('dustHeight', 45), min: 20, max: 200, label: '↕ Height Spread' },
         dustSizeJitter: { value: getInitialValue('dustSizeJitter', 0.6), min: 0, max: 1, label: '🎲 Size Jitter' },
-        dustHueJitter: { value: getInitialValue('dustHueJitter', 0.1), min: 0, max: 1, label: '🎲 Hue Jitter' },
+        dustHueJitter: { value: getInitialValue('dustHueJitter', 0.3), min: 0, max: 1, label: '🎲 Hue Jitter' },
         dustOpacityJitter: { value: getInitialValue('dustOpacityJitter', 0.5), min: 0, max: 1, label: '🎲 Opacity Jitter' },
         dustMajorBloomColor: { value: getInitialValue('dustMajorBloomColor', '#e8c36e'), label: 'Major Color' },
         dustMinorBloomColor: { value: getInitialValue('dustMinorBloomColor', '#71acec'), label: 'Minor Color' },
@@ -192,8 +192,10 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
         const isNeutral = (isMajor === null || isMajor === undefined);
         const targetNeutral = isNeutral ? 1.0 : 0.0;
 
-        smoothMajorRef.current = THREE.MathUtils.lerp(smoothMajorRef.current, targetMajor, delta * 1.2);
-        smoothNeutralRef.current = THREE.MathUtils.lerp(smoothNeutralRef.current, targetNeutral, delta * 1.2);
+        // Snappier transition so major/minor is clearly visible; less time in neutral blend
+        const lerpSpeed = 3.0;
+        smoothMajorRef.current = THREE.MathUtils.lerp(smoothMajorRef.current, targetMajor, delta * lerpSpeed);
+        smoothNeutralRef.current = THREE.MathUtils.lerp(smoothNeutralRef.current, targetNeutral, delta * lerpSpeed);
 
         const dm = dustMaterial;
         dm.uniforms.uTime.value = clock.getElapsedTime();

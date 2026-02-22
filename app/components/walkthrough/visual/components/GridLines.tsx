@@ -41,11 +41,11 @@ export function GridLines({ isMajor }: GridLinesProps) {
         edgeOpacity: { value: getInitialValue('edgeOpacity', 0.05), min: 0.01, max: 0.5, label: 'Opacity' },
         edgeBloomStart: { value: getInitialValue('edgeBloomStart', 100), min: 0, max: 150, label: '🔆 Bloom Start' },
         edgeBloomFade: { value: getInitialValue('edgeBloomFade', 40), min: 5, max: 150, label: '🔆 Bloom Fade' },
-        edgeBloomIntensity: { value: getInitialValue('edgeBloomIntensity', 5.0), min: 0.5, max: 8.0, label: '🔆 Bloom Power' },
+        edgeBloomIntensity: { value: getInitialValue('edgeBloomIntensity', 8.0), min: 0.5, max: 10.0, label: '🔆 Bloom Power' },
         edgeColorStart: { value: getInitialValue('edgeColorStart', 30), min: 0, max: 150, label: '🎨 Color Start' },
         edgeColorFade: { value: getInitialValue('edgeColorFade', 10), min: 0, max: 150, label: '🎨 Color Fade' },
         edgeMajorBloomColor: { value: getInitialValue('edgeMajorBloomColor', '#ece2bc'), label: 'Major Color' },
-        edgeMinorBloomColor: { value: getInitialValue('edgeMinorBloomColor', '#b9d4ea'), label: 'Minor Color' },
+        edgeMinorBloomColor: { value: getInitialValue('edgeMinorBloomColor', '#a6ceef'), label: 'Minor Color' },
         edgeNeutralBloomColor: { value: getInitialValue('edgeNeutralBloomColor', '#eee9ea'), label: 'Neutral Color' },
     });
 
@@ -155,8 +155,9 @@ export function GridLines({ isMajor }: GridLinesProps) {
         const isNeutral = (isMajor === null || isMajor === undefined);
         const targetNeutral = isNeutral ? 1.0 : 0.0;
 
-        smoothMajorRef.current = THREE.MathUtils.lerp(smoothMajorRef.current, targetMajor, delta * 1.2);
-        smoothNeutralRef.current = THREE.MathUtils.lerp(smoothNeutralRef.current, targetNeutral, delta * 1.2);
+        const lerpSpeed = 1.8;
+        smoothMajorRef.current = THREE.MathUtils.lerp(smoothMajorRef.current, targetMajor, delta * lerpSpeed);
+        smoothNeutralRef.current = THREE.MathUtils.lerp(smoothNeutralRef.current, targetNeutral, delta * lerpSpeed);
 
         const uniforms = shaderMaterial.uniforms;
         uniforms.uTime.value = time;

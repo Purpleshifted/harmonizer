@@ -17,7 +17,7 @@ export default function WalkthroughSelectionPage() {
                         <h2 className="text-2xl font-bold mb-4 relative z-10">Visual Sandbox</h2>
                         <p className="text-sm text-center text-gray-400 relative z-10">
                             Experimental visuals.
-                            Leva controls enabled.
+                            Leva controls. Press <kbd className="px-1 rounded bg-white/10">`</kbd> for display mode.
                         </p>
                     </div>
                 </Link>
@@ -29,7 +29,7 @@ export default function WalkthroughSelectionPage() {
                         <h2 className="text-2xl font-bold mb-4">Unified Mode</h2>
                         <p className="text-sm text-center text-gray-400">
                             Merge target.
-                            Combines audio and visuals.
+                            Combines audio and visuals. Press <kbd className="px-1 rounded bg-white/10">`</kbd> for display mode.
                         </p>
                     </div>
                 </Link>

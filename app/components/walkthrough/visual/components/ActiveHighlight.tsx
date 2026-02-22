@@ -218,8 +218,9 @@ export function ActiveHighlight({ mode, activeNodes, isMajor }: ActiveHighlightP
         const targetMajor = isMajor === true ? 1.0 : 0.0;
         const isNeutralMode = mode === 'node' || mode === 'edge';
         const targetNeutral = isNeutralMode ? 0.6 : 0.0;
-        smoothMajorRef.current = THREE.MathUtils.lerp(smoothMajorRef.current, targetMajor, delta * 1.2);
-        smoothNeutralRef.current = THREE.MathUtils.lerp(smoothNeutralRef.current, targetNeutral, delta * 1.2);
+        const lerpSpeed = 2.5;
+        smoothMajorRef.current = THREE.MathUtils.lerp(smoothMajorRef.current, targetMajor, delta * lerpSpeed);
+        smoothNeutralRef.current = THREE.MathUtils.lerp(smoothNeutralRef.current, targetNeutral, delta * lerpSpeed);
 
         const majorCol = new THREE.Color(hlMajorColor.slice(0, 7));
         const minorCol = new THREE.Color(hlMinorColor.slice(0, 7));

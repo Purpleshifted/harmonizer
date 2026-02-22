@@ -18,7 +18,7 @@ export function useWaveConfig() {
         waveAmplitude: { value: 1.2, min: 0, max: 5, step: 0.1, label: 'Amplitude' },
         waveFrequency: { value: 0.08, min: 0.01, max: 0.5, step: 0.01, label: 'Frequency' },
         waveSpeed: { value: 1.2, min: 0, max: 5, step: 0.1, label: 'Speed' },
-        defaultEyeLevel: { value: 4.0, min: 1, max: 20, step: 0.5, label: 'Eye Level' },
+        defaultEyeLevel: { value: 7.0, min: 1, max: 20, step: 0.5, label: 'Eye Level' },
     });
 
     return config;

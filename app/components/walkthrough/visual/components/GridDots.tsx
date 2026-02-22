@@ -156,8 +156,9 @@ export function GridDots({ setLocationInfo, onDetectionUpdate, isMajor }: GridDo
         const isNeutral = (isMajor === null || isMajor === undefined);
         const targetNeutral = isNeutral ? 1.0 : 0.0;
 
-        smoothMajorRef.current = THREE.MathUtils.lerp(smoothMajorRef.current, targetMajor, delta * 1.2);
-        smoothNeutralRef.current = THREE.MathUtils.lerp(smoothNeutralRef.current, targetNeutral, delta * 1.2);
+        const lerpSpeed = 4.0;
+        smoothMajorRef.current = THREE.MathUtils.lerp(smoothMajorRef.current, targetMajor, delta * lerpSpeed);
+        smoothNeutralRef.current = THREE.MathUtils.lerp(smoothNeutralRef.current, targetNeutral, delta * lerpSpeed);
 
         const dm = dotsShader;
         if (!dm.uniforms) return;
