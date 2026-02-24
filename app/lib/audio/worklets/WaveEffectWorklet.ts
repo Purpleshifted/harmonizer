@@ -41,7 +41,7 @@ export class WaveEffectWorklet extends Tone.ToneAudioNode {
                 url: WAVE_SAMPLER_CONFIG.path,
                 loop: true,
                 autostart: false,
-                volume: -6,
+                volume: 0,
             });
 
             // Wait for the audio file to be loaded
