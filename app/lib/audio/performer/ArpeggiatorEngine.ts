@@ -77,7 +77,7 @@ export class ArpeggiatorEngine {
 
     private setupNodeMode() {
         this.nodeArp = new ArpEngineWorklet({ mode: 'node' });
-        this.nodeArpGain = new Tone.Gain(0.5);
+        this.nodeArpGain = new Tone.Gain(1.5);
         this.nodePanner = createSpatialPanner({ useHRTF: true, refDistance: 4, maxDistance: 40 });
         this.nodeArp.output.connect(this.nodeArpGain);
         this.nodeArpGain.connect(this.nodePanner);
@@ -238,6 +238,10 @@ export class ArpeggiatorEngine {
         if (this.isDisposed || !this.faceSeq) return;
         this.faceSeq.events = events;
         if (this.faceSeq.state !== 'started') {
+            // Ensure Transport is running (face sequence depends on it)
+            if (Tone.getTransport().state !== 'started') {
+                Tone.getTransport().start();
+            }
             const startTime = Tone.getTransport().seconds;
             this.faceSeq.start(startTime);
         }

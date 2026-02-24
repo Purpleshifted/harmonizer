@@ -1,14 +1,21 @@
 import * as Tone from 'tone';
 
 /**
- * HarmonicSaturator - A Tone.js compatible wrapper for a custom AudioWorklet saturator.
+ * HarmonicSaturator - Soft-clipping harmonic saturation using Tone.js native nodes.
+ * Replaced AudioWorklet with Tone.WaveShaper for reliable cross-browser support.
+ *
+ * Algorithm: f(x) = (3x - x³) / 2  (cubic soft clipper, adds odd harmonics)
+ * Drive multiplies input before saturation; mix blends dry/wet.
  */
 export class HarmonicSaturator extends Tone.ToneAudioNode {
     public readonly name: string = 'HarmonicSaturator';
     public readonly input: Tone.Gain;
     public readonly output: Tone.Gain;
 
-    private worklet: AudioWorkletNode | null = null;
+    private dryGain: Tone.Gain;
+    private wetGain: Tone.Gain;
+    private driveGain: Tone.Gain;
+    private shaper: Tone.WaveShaper;
     private _drive: number = 1.0;
     private _mix: number = 0.5;
 
@@ -17,55 +24,30 @@ export class HarmonicSaturator extends Tone.ToneAudioNode {
         this.input = new Tone.Gain();
         this.output = new Tone.Gain();
 
-        // Initialization is async, so we use a placeholder gain until loaded
-        this.input.connect(this.output);
-        this.initWorklet();
-    }
+        // Drive stage: multiply input amplitude before saturation
+        this.driveGain = new Tone.Gain(this._drive);
 
-    private async initWorklet() {
-        try {
-            const context = Tone.getContext();
-            const rawContext = context.rawContext as any;
+        // Waveshaper: cubic soft clipper (3x - x³) / 2
+        this.shaper = new Tone.WaveShaper((x: number) => {
+            if (x > 1) return 1;
+            if (x < -1) return -1;
+            return (3 * x - x * x * x) / 2;
+        }, 4096);
 
-            if (!rawContext || !rawContext.audioWorklet) {
-                console.warn('[HarmonicSaturator] AudioWorklet not supported.');
-                return;
-            }
+        // Dry/wet mix using two gain nodes
+        this.dryGain = new Tone.Gain(1 - this._mix);
+        this.wetGain = new Tone.Gain(this._mix);
 
-            // 1. Load module via the most direct context available
-            await rawContext.audioWorklet.addModule('/worklets/saturator-processor.js');
+        // Signal routing:
+        //   input ──┬── dryGain ──────────┬── output
+        //           └── driveGain → shaper → wetGain ──┘
+        this.input.connect(this.dryGain);
+        this.dryGain.connect(this.output);
 
-            if (this.disposed) return;
-
-            // 2. Create node using Tone's helper if it exists, otherwise use native
-            // Some versions of Tone.js/standardized-audio-context require using their factory
-            if (typeof (context as any).createAudioWorkletNode === 'function') {
-                this.worklet = (context as any).createAudioWorkletNode('saturator-processor', {
-                    numberOfInputs: 1,
-                    numberOfOutputs: 1,
-                    outputChannelCount: [2]
-                });
-            } else {
-                // Fallback to native but with the raw native context
-                this.worklet = new AudioWorkletNode(rawContext, 'saturator-processor', {
-                    numberOfInputs: 1,
-                    numberOfOutputs: 1,
-                    outputChannelCount: [2]
-                });
-            }
-
-            if (!this.worklet) throw new Error('Could not create AudioWorkletNode');
-
-            // Re-route through worklet
-            this.input.disconnect(this.output);
-            this.input.connect(this.worklet as unknown as Tone.InputNode);
-            this.worklet.connect(this.output.input as unknown as AudioNode);
-
-            if (this._drive !== undefined) this.drive = this._drive;
-            if (this._mix !== undefined) this.mix = this._mix;
-        } catch (e) {
-            console.error('[HarmonicSaturator] Failed to load AudioWorklet:', e);
-        }
+        this.input.connect(this.driveGain);
+        this.driveGain.connect(this.shaper);
+        this.shaper.connect(this.wetGain);
+        this.wetGain.connect(this.output);
     }
 
     public get drive(): number {
@@ -74,10 +56,7 @@ export class HarmonicSaturator extends Tone.ToneAudioNode {
 
     public set drive(value: number) {
         this._drive = value;
-        if (this.worklet) {
-            const param = this.worklet.parameters.get('drive');
-            if (param) param.value = value;
-        }
+        this.driveGain.gain.rampTo(value, 0.05);
     }
 
     public get mix(): number {
@@ -85,18 +64,19 @@ export class HarmonicSaturator extends Tone.ToneAudioNode {
     }
 
     public set mix(value: number) {
-        this._mix = value;
-        if (this.worklet) {
-            const param = this.worklet.parameters.get('mix');
-            if (param) param.value = value;
-        }
+        this._mix = Math.max(0, Math.min(1, value));
+        this.wetGain.gain.rampTo(this._mix, 0.05);
+        this.dryGain.gain.rampTo(1 - this._mix, 0.05);
     }
 
     public dispose(): this {
         super.dispose();
         this.input.dispose();
         this.output.dispose();
-        this.worklet?.disconnect();
+        this.driveGain.dispose();
+        this.shaper.dispose();
+        this.dryGain.dispose();
+        this.wetGain.dispose();
         return this;
     }
 }

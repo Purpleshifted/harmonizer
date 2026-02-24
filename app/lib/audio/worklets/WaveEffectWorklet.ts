@@ -1,118 +1,91 @@
 /**
- * WaveEffectWorklet - Loop player + lowpass filter + gain on audio thread.
- * No Panner3D: output goes to reverb, then RotationSpatializer handles placement.
+ * WaveEffectWorklet - Loop player + lowpass filter + gain using Tone.js native nodes.
+ * Replaced AudioWorklet with Tone.Player for reliable cross-browser support.
+ * Same external interface — WaveRevolver needs no changes.
  */
 import * as Tone from 'tone';
 import { WAVE_SAMPLER_CONFIG } from '../sources/Sampler';
-import { getCachedWaveBuffer } from '../sources/WaveBufferCache';
 
 export class WaveEffectWorklet extends Tone.ToneAudioNode {
     public readonly name = 'WaveEffectWorklet';
     public readonly input: Tone.Gain;
     public readonly output: Tone.Gain;
 
-    private worklet: AudioWorkletNode | null = null;
-    private _initialized = false;
+    /** Resolves when the audio buffer is loaded and ready */
+    public readonly ready: Promise<boolean>;
+
+    private player: Tone.Player | null = null;
+    private filter: Tone.Filter;
+    private intensityGain: Tone.Gain;
     private _playing = false;
-    private _bufferLoaded = false;
+    private _initialized = false;
 
     constructor() {
         super();
         this.input = new Tone.Gain(0);
         this.output = new Tone.Gain();
-        this.initWorklet();
+
+        // Build signal chain: Player → intensityGain → filter → output
+        this.intensityGain = new Tone.Gain(0);
+        this.filter = new Tone.Filter({ type: 'lowpass', frequency: 800 });
+
+        this.intensityGain.connect(this.filter);
+        this.filter.connect(this.output);
+
+        this.ready = this.initPlayer();
     }
 
-    private async initWorklet() {
+    private async initPlayer(): Promise<boolean> {
         try {
-            const context = Tone.getContext() as any;
-            const rawContext = context?.rawContext ?? context;
-            if (!rawContext?.audioWorklet) {
-                console.warn('[WaveEffectWorklet] AudioWorklet not supported.');
-                return;
-            }
-
-            await rawContext.audioWorklet.addModule('/worklets/instruments/wave-effect-processor.js');
-            if ((this as any).disposed) return;
-
-            const opts = { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] };
-            if (typeof context.createAudioWorkletNode === 'function') {
-                this.worklet = context.createAudioWorkletNode('wave-effect-processor', opts);
-            } else {
-                this.worklet = new AudioWorkletNode(rawContext as BaseAudioContext, 'wave-effect-processor', opts);
-            }
-            if (!this.worklet) throw new Error('Could not create AudioWorkletNode');
-
-            this.worklet.connect(this.output.input as unknown as AudioNode);
-
-            await this.loadBuffer();
-            this._initialized = true;
-        } catch (e) {
-            console.error('[WaveEffectWorklet] Failed to init:', e);
-        }
-    }
-
-    private async loadBuffer() {
-        try {
-            const preloaded = getCachedWaveBuffer();
-            if (preloaded && this.worklet) {
-                this.worklet.port.postMessage({
-                    type: 'buffer',
-                    channel0: preloaded.channel0,
-                    channel1: preloaded.channel1,
-                    length: preloaded.length,
-                    sampleRate: preloaded.sampleRate,
-                });
-                this._bufferLoaded = true;
-                return;
-            }
-
-            const res = await fetch(WAVE_SAMPLER_CONFIG.path);
-            const arrayBuffer = await res.arrayBuffer();
-            const ctx = Tone.getContext() as any;
-            const rawCtx = ctx?.rawContext ?? ctx;
-            const audioBuffer = await rawCtx.decodeAudioData(arrayBuffer);
-            const ch0 = audioBuffer.getChannelData(0);
-            const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : ch0;
-            this.worklet?.port.postMessage({
-                type: 'buffer',
-                channel0: ch0,
-                channel1: ch1,
-                length: audioBuffer.length,
-                sampleRate: audioBuffer.sampleRate,
+            this.player = new Tone.Player({
+                url: WAVE_SAMPLER_CONFIG.path,
+                loop: true,
+                autostart: false,
+                volume: -6,
             });
-            this._bufferLoaded = true;
+
+            // Wait for the audio file to be loaded
+            await Tone.loaded();
+            if ((this as any).disposed) return false;
+
+            this.player.connect(this.intensityGain);
+            this._initialized = true;
+            console.log('[WaveEffectWorklet] ✓ initialized (Tone.Player)');
+            return true;
         } catch (e) {
-            console.error('[WaveEffectWorklet] Failed to load buffer:', e);
+            console.error('[WaveEffectWorklet] Failed to load audio:', e);
+            return false;
         }
     }
 
     /** Apply DSP updates from the Conductor (no position - spatialization is after reverb) */
     update(intensity: number, filterFreq: number, time: number) {
-        if (!this.worklet) return;
+        if (!this._initialized || !this.player) return;
 
-        const intensityParam = this.worklet.parameters.get('intensity') as AudioParam;
-        const filterParam = this.worklet.parameters.get('filterFreq') as AudioParam;
         const t = time ?? Tone.now();
 
-        if (intensityParam) intensityParam.setTargetAtTime(intensity, t, 0.1);
-        if (filterParam) filterParam.setTargetAtTime(filterFreq, t, 0.1);
+        this.intensityGain.gain.rampTo(intensity, 0.1, t);
+        this.filter.frequency.rampTo(filterFreq, 0.1, t);
 
-        if (!this._playing && this._bufferLoaded) {
+        if (!this._playing) {
             this.start();
         }
     }
 
     start() {
-        if (!this._playing && this.worklet?.port) {
-            this.worklet.port.postMessage({ type: 'start' });
-            this._playing = true;
+        if (!this._playing && this.player && this._initialized) {
+            try {
+                this.player.start();
+                this._playing = true;
+            } catch {
+                // May fail if context not started yet — will retry on next update
+            }
         }
     }
 
     stop() {
-        if (this._playing && this.worklet?.port) {
-            this.worklet.port.postMessage({ type: 'stop' });
+        if (this._playing && this.player) {
+            try { this.player.stop(); } catch { /* noop */ }
             this._playing = false;
         }
     }
@@ -123,7 +96,9 @@ export class WaveEffectWorklet extends Tone.ToneAudioNode {
 
     dispose(): this {
         this.stop();
-        this.worklet?.disconnect();
+        this.player?.dispose();
+        this.filter.dispose();
+        this.intensityGain.dispose();
         super.dispose();
         this.input.dispose();
         this.output.dispose();

@@ -1,70 +1,67 @@
+/**
+ * ArpEngineWorklet - Arpeggiator synthesis using Tone.js native synths.
+ * Replaced AudioWorklet with Tone.Synth array for reliable cross-browser support.
+ * Same external interface — ArpeggiatorEngine needs no changes.
+ *
+ * Voice count is minimised per mode to keep the Web Audio graph light:
+ *   node → 2, edge → 7, face → 3  (total across 4 instances ≈ 19 vs 48 before)
+ */
 import * as Tone from 'tone';
 import { ARP_SOUND_PRESETS, type ArpSoundPreset } from '../presets/ArpSoundPresets';
 
 export type ArpMode = 'node' | 'edge' | 'face';
 
-/**
- * ArpEngineWorklet - Unified arpeggiator synthesis on audio thread.
- * One instance per "arp" - for Edge mode, use TWO instances (one per edge endpoint).
- */
+/** Voices actually needed per mode (keeps Web Audio node count low) */
+const VOICES_PER_MODE: Record<ArpMode, number> = {
+    node: 2,   // probability trigger, rarely >1 concurrent
+    edge: 7,   // edgeArp1 uses 1, edgeArp2 uses up to 6
+    face: 3,   // sequence plays 1 at a time, 3 for overlap
+};
+
 export class ArpEngineWorklet extends Tone.ToneAudioNode {
     public readonly name = 'ArpEngineWorklet';
     public readonly input: Tone.Gain;
     public readonly output: Tone.Gain;
 
-    private worklet: AudioWorkletNode | null = null;
+    /** Resolves immediately — no async init needed with Tone.js */
+    public readonly ready: Promise<boolean>;
+
+    private synths: Tone.Synth[] = [];
     private _mode: ArpMode = 'node';
     private _initialized = false;
 
     constructor(options?: { mode?: ArpMode }) {
         super();
-        this.input = new Tone.Gain(0); // Source node - no input
+        this.input = new Tone.Gain(0);
         this.output = new Tone.Gain();
         if (options?.mode != null) this._mode = options.mode;
-        this.initWorklet();
+
+        this.buildSynths(ARP_SOUND_PRESETS[this._mode]);
+        this._initialized = true;
+        this.ready = Promise.resolve(true);
     }
 
-    private async initWorklet() {
-        try {
-            const context = Tone.getContext() as any;
-            const rawContext = context?.rawContext as BaseAudioContext | undefined;
-            if (!rawContext?.audioWorklet) {
-                console.warn('[ArpEngineWorklet] AudioWorklet not supported.');
-                return;
-            }
+    /** Create (or re-create) the synth array from a sound preset */
+    private buildSynths(preset: ArpSoundPreset) {
+        // Dispose old synths if rebuilding
+        this.synths.forEach((s) => { try { s.dispose(); } catch { /* noop */ } });
+        this.synths = [];
 
-            await rawContext.audioWorklet.addModule('/worklets/performer/arp-engine-processor.js');
-            if ((this as any).disposed) return;
+        const count = VOICES_PER_MODE[this._mode] ?? 3;
 
-            const opts = {
-                numberOfInputs: 0,
-                numberOfOutputs: 1,
-                outputChannelCount: [2],
-            };
-
-            if (typeof context.createAudioWorkletNode === 'function') {
-                this.worklet = context.createAudioWorkletNode('arp-engine-processor', opts);
-            } else {
-                this.worklet = new AudioWorkletNode(rawContext, 'arp-engine-processor', opts);
-            }
-
-            if (!this.worklet) throw new Error('Could not create AudioWorkletNode');
-
-            this.worklet.connect(this.output.input as unknown as AudioNode);
-
-            const modeVal = { node: 0, edge: 1, face: 2 }[this._mode] ?? 0;
-            (this.worklet.parameters.get('sampleRate') as AudioParam)!.value = rawContext.sampleRate;
-            (this.worklet.parameters.get('mode') as AudioParam)!.value = modeVal;
-
-            this.worklet.port.postMessage({
-                type: 'init',
-                baseTime: rawContext.currentTime,
+        for (let i = 0; i < count; i++) {
+            const synth = new Tone.Synth({
+                oscillator: { type: 'sine' as any },
+                envelope: {
+                    attack: (preset.attack ?? 15) / 1000,
+                    decay: (preset.decay ?? 400) / 1000,
+                    sustain: preset.sustain ?? 0.1,
+                    release: (preset.release ?? 800) / 1000,
+                },
+                volume: 0,
             });
-            this.worklet.port.postMessage({ type: 'setMode', mode: modeVal });
-            this.worklet.port.postMessage({ type: 'setSoundPreset', preset: ARP_SOUND_PRESETS[this._mode] });
-            this._initialized = true;
-        } catch (e) {
-            console.error('[ArpEngineWorklet] Failed to load AudioWorklet:', e);
+            synth.connect(this.output);
+            this.synths.push(synth);
         }
     }
 
@@ -73,48 +70,67 @@ export class ArpEngineWorklet extends Tone.ToneAudioNode {
     }
     set mode(v: ArpMode) {
         this._mode = v;
-        const modeVal = { node: 0, edge: 1, face: 2 }[v] ?? 0;
-        (this.worklet?.parameters.get('mode') as AudioParam)?.setValueAtTime(modeVal, Tone.context.currentTime);
-        this.worklet?.port?.postMessage({ type: 'setMode', mode: modeVal });
-        this.worklet?.port?.postMessage({ type: 'setSoundPreset', preset: ARP_SOUND_PRESETS[v] });
+        this.buildSynths(ARP_SOUND_PRESETS[v]);
     }
 
-    /** Inject Sound Preset from main thread (e.g. custom preset) */
+    /** Inject Sound Preset from main thread */
     setSoundPreset(preset: ArpSoundPreset): void {
-        this.worklet?.port?.postMessage({ type: 'setSoundPreset', preset });
+        this.buildSynths(preset);
     }
 
     /**
      * Schedule a note. time = context time (seconds); duration in seconds.
+     * Velocity is scaled by 0.3 to match original worklet output levels.
      */
     trigger(frequency: number, velocity: number, time: number, duration?: number, slotIndex?: number): void {
-        if (!this.worklet?.port) return;
-        const ctxTime = Tone.getContext().currentTime;
-        const startTime = time;
+        if (!this._initialized || this.synths.length === 0) return;
+
+        let slot = slotIndex;
+        if (slot == null || slot < 0 || slot >= this.synths.length) {
+            slot = this.findFreeSlot();
+        }
+        // Wrap slot to available synth count
+        slot = slot % this.synths.length;
+
+        const synth = this.synths[slot];
         const dur = duration ?? (this._mode === 'node' ? 0.5 : this._mode === 'edge' ? 0.125 : 0.5);
-        this.worklet.port.postMessage({
-            type: 'noteOn',
-            frequency,
-            velocity,
-            startTime,
-            duration: dur,
-            slotIndex,
-        });
+
+        try {
+            // Match original worklet: output = sample * env * vel * 0.3
+            synth.triggerAttackRelease(frequency, dur, time, velocity * 0.3);
+        } catch {
+            // Tone.js may throw if context isn't started yet — safe to ignore
+        }
+    }
+
+    private findFreeSlot(): number {
+        for (let i = 0; i < this.synths.length; i++) {
+            const env = this.synths[i].envelope;
+            if (env.value < 0.01) return i;
+        }
+        return 0;
     }
 
     releaseAll(): void {
-        this.worklet?.port?.postMessage({ type: 'releaseAll' });
+        this.synths.forEach((s) => {
+            try { s.triggerRelease(); } catch { /* noop */ }
+        });
     }
 
     releaseVoice(slotIndex: number): void {
-        this.worklet?.port?.postMessage({ type: 'releaseVoice', slotIndex });
+        const slot = slotIndex % this.synths.length;
+        if (slot >= 0 && slot < this.synths.length) {
+            try { this.synths[slot].triggerRelease(); } catch { /* noop */ }
+        }
     }
 
     dispose(): this {
+        this.synths.forEach((s) => { try { s.dispose(); } catch { /* noop */ } });
+        this.synths = [];
+        this._initialized = false;
         super.dispose();
         this.input.dispose();
         this.output.dispose();
-        this.worklet?.disconnect();
         return this;
     }
 }
