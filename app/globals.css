@@ -26,3 +26,14 @@ body {
   overscroll-behavior-x: none;
   overscroll-behavior-y: none;
 }
+
+/* 
+ * Display Mode (Clean Screen) 
+ * Completely hides Next.js development server overlays (Turbopack indicator, toasts, etc.)
+ */
+body.display-mode-active nextjs-portal,
+body.display-mode-active [data-nextjs-toast] {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

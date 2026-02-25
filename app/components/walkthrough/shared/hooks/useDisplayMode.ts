@@ -22,6 +22,18 @@ export function useDisplayMode(): [boolean, (value: boolean) => void] {
         setDisplayMode((prev) => !prev);
     }, []);
 
+    // Add/remove a class on the body to allow global CSS to hide Next.js dev tools
+    useEffect(() => {
+        if (displayMode) {
+            document.body.classList.add('display-mode-active');
+        } else {
+            document.body.classList.remove('display-mode-active');
+        }
+        return () => {
+            document.body.classList.remove('display-mode-active');
+        }
+    }, [displayMode]);
+
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.key !== '`' && e.key !== 'Backquote') return;

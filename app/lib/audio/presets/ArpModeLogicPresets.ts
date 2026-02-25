@@ -100,12 +100,12 @@ export const EDGE_MODE_LOGIC_PRESET: EdgeModeLogicPreset = {
 };
 
 export const FACE_MODE_LOGIC_PRESET: FaceModeLogicPreset = {
-    patternLength: 8,
+    patternLength: 16,
     baseProbability: 0.5,
     subdivision: '4n',
-    duration: 0.9,
+    duration: 1.5,
     minorAscending: true,
-    octaveVariationRatio: 0.25,
+    octaveVariationRatio: 0.5,
     velocityBase: 0.22,
 };
 

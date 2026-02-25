@@ -23,6 +23,7 @@ import { forwardToYaw } from '../engine/RotationSpatializer';
 
 // Import Effectors & Sources
 import { BusSystem } from '../engine/Buses';
+import { AudioMetrics } from '../AudioMetrics';
 import { WAVE_SAMPLER_CONFIG, ORCHESTRA_CONFIG } from '../sources/Sampler';
 import type { MixLevels } from '../engine/Levels';
 
@@ -89,7 +90,7 @@ export class Dirigent {
         modeData: { targetMode: string, notes: string[], positions: THREE.Vector3[], isLoop: boolean, isMajor?: boolean, adjacentNodeNotes?: Array<{ note: { name: string }; pos: THREE.Vector3 }> },
         droneData: { notes: Array<{ name: string, position: THREE.Vector3, distance: number }> },
         arpData: { note1: string, note2: string, pos1: THREE.Vector3, pos2: THREE.Vector3, dist1: number, dist2: number, neighbors: any[] },
-        globalData: { centerPos: THREE.Vector3, delta: number, listenerForward?: THREE.Vector3 },
+        globalData: { centerPos: THREE.Vector3, cameraY?: number, delta: number, listenerForward?: THREE.Vector3 },
         mixLevels: MixLevels,
         time: number
     ) {
@@ -108,7 +109,7 @@ export class Dirigent {
 
         if (time - this.lastWaveUpdateTime >= Dirigent.WAVE_UPDATE_INTERVAL) {
             this.lastWaveUpdateTime = time;
-            this.conductWave(globalData.centerPos, globalData.listenerForward, time);
+            this.conductWave(globalData.centerPos, globalData.cameraY, globalData.listenerForward, time);
         }
         if (time - this.lastDroneUpdateTime >= Dirigent.DRONE_UPDATE_INTERVAL) {
             this.lastDroneUpdateTime = time;
@@ -251,14 +252,70 @@ export class Dirigent {
         if (notes[0]) this.nodeSynth.start(notes[0], time);
     }
 
-    private conductWave(centerPos: THREE.Vector3, listenerForward: THREE.Vector3 | undefined, time: number) {
-        const params = this.env.calculateWaveParams(this.waveCycle, centerPos, WAVE_SAMPLER_CONFIG);
+    private conductWave(centerPos: THREE.Vector3, cameraY: number | undefined, listenerForward: THREE.Vector3 | undefined, time: number) {
+        // Sync wave audio directly to the visual wave height experienced by the player.
+        // defaultEyeLevel is linked via AudioMetrics dynamically.
+        // waveY fluctuates roughly between -1.5 and +1.5 based on R3F visual amplitude settings.
+        const baseEyeLevel = AudioMetrics.defaultEyeLevel;
+        const currentY = cameraY ?? baseEyeLevel;
+        const waveY = currentY - baseEyeLevel;
+
+        const amp = Math.max(0.1, AudioMetrics.waveParams.amplitude);
+        const freq = AudioMetrics.waveParams.frequency;
+        const speed = AudioMetrics.waveParams.speed;
+
+        // Background gentle swell based on total Y height
+        const swell = Math.max(0, Math.min(1, (waveY / amp + 1.0) / 2.0));
+
+        const config = WAVE_SAMPLER_CONFIG;
+
+        // Match the math from visual_common.glsl:
+        // phase = pos.x * freq + time * speed
+        // The wave crest (Bloom Band) sweeps predictably over space.
+        const phase1 = centerPos.x * freq + this.waveCycle * speed;
+
+        // We calculate distance to the nearest wave peak. Sine naturally peaks when phase % 2PI = ~1.5707 (PI/2).
+        // A math trick to find simply how "close" we are to the peak [0..1]
+        const normCrest = (Math.sin(phase1) + 1.0) * 0.5;
+
+        // Wave peaks strictly when normCrest approaches 1.0
+        // We use this to trigger the crashing audio sample
+
+        let p = -1.0;
+        let audioCurve = 0.0;
+
+        // Trigger audio sample actively while we are in the top 20% width of the wave's peak
+        if (normCrest > 0.8) {
+            // Map 0.8 -> 1.0 -> 0.8 back into a 0.0 -> 1.0 curve representing our physical presence inside the bloom band
+            const presence = (normCrest - 0.8) * 5.0; // 0.0 to 1.0
+
+            // Because the sound peaks in the middle of the sample visually, we map it identically
+            audioCurve = Math.pow(presence, 1.5);
+
+            // Export this physical audio trigger to visually render the crest accurately
+            p = presence;
+        }
+
+        const isStrong = Math.floor(this.waveCycle / config.period) % 10 === 0;
+
+        AudioMetrics.audioWaveProgress = p;
+
+        // The crashing waterfall is the primary volume driver, while the general visual swell acts as a bed
+        const intensity = config.baseVolume
+            + (swell * 0.1)
+            + (audioCurve * (isStrong ? 0.35 : 0.20));
+
+        const filterFreq = 600
+            + (swell * 300)
+            + (audioCurve * (isStrong ? 1500 : 800));
+
+        // Lock the audio wavefront physical source origin location perfectly statically to the 
+        // +X direction (PI/2), because the visual Bloom Band propagates perfectly along -X uniformly.
+        const waveAngle = Math.PI / 2;
+
         const listenerYaw = listenerForward ? forwardToYaw(listenerForward) : 0;
-        const waveAngle = Math.atan2(
-            params.targetPos.z - centerPos.z,
-            params.targetPos.x - centerPos.x
-        );
-        this.waveRevolver.update(params.intensity, params.filterFreq, listenerYaw, waveAngle, time);
+
+        this.waveRevolver.update(intensity, filterFreq, listenerYaw, waveAngle, time);
     }
 
     public dispose() {

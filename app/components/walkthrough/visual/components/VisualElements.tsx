@@ -38,7 +38,7 @@ export function VisualElements({ detection, onLocationUpdate, handleDetectionUpd
                 isMajor={detection?.isMajor ?? null}
             />
             <GridLines isMajor={detection?.isMajor ?? null} />
-            <AmbienceParticles isMajor={detection?.isMajor ?? null} />
+            <AmbienceParticles isMajor={detection?.isMajor ?? null} mode={detection?.mode ?? 'none'} />
             {detection && (
                 <ActiveHighlight
                     mode={detection.mode}

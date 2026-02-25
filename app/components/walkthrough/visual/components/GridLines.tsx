@@ -9,9 +9,10 @@ import { getNodeWorldPosition, getWorldToGrid } from '../../../../lib/tonnetz/to
 const VIEW_RADIUS = 100;
 const GRID_SIZE = VIEW_RADIUS * 2 + 1;
 const TOTAL_INSTANCES = GRID_SIZE * GRID_SIZE;
-import { useWaveConfigContext } from '../core/WaveSystem';
 import { DetectionResult } from '../../shared/hooks/useSpatialDetection';
 import { getInitialValue } from '../core/Persistence';
+import { useWaveConfigContext } from '../core/WaveSystem';
+import { AudioMetrics } from '../../../../lib/audio/AudioMetrics';
 import { WAVE_UNIFORMS, WAVE_VERTEX_CHUNK } from '../shaders/wave.glsl';
 import { COMMON_UNIFORMS, COLOR_UNIFORMS, BLOOM_UNIFORMS, FRAGMENT_CHUNK } from '../shaders/visual_common.glsl';
 
@@ -38,11 +39,11 @@ export function GridLines({ isMajor }: GridLinesProps) {
         edgeMinorBloomColor,
         edgeNeutralBloomColor,
     } = useControls('Grid Edges', {
-        edgeOpacity: { value: getInitialValue('edgeOpacity', 0.05), min: 0.01, max: 0.5, label: 'Opacity' },
-        edgeBloomStart: { value: getInitialValue('edgeBloomStart', 100), min: 0, max: 150, label: '🔆 Bloom Start' },
-        edgeBloomFade: { value: getInitialValue('edgeBloomFade', 40), min: 5, max: 150, label: '🔆 Bloom Fade' },
+        edgeOpacity: { value: getInitialValue('edgeOpacity', 0.015), min: 0.01, max: 0.5, label: 'Opacity' },
+        edgeBloomStart: { value: getInitialValue('edgeBloomStart', 116), min: 0, max: 150, label: '🔆 Bloom Start' },
+        edgeBloomFade: { value: getInitialValue('edgeBloomFade', 150), min: 5, max: 150, label: '🔆 Bloom Fade' },
         edgeBloomIntensity: { value: getInitialValue('edgeBloomIntensity', 8.0), min: 0.5, max: 10.0, label: '🔆 Bloom Power' },
-        edgeColorStart: { value: getInitialValue('edgeColorStart', 30), min: 0, max: 150, label: '🎨 Color Start' },
+        edgeColorStart: { value: getInitialValue('edgeColorStart', 0), min: 0, max: 150, label: '🎨 Color Start' },
         edgeColorFade: { value: getInitialValue('edgeColorFade', 10), min: 0, max: 150, label: '🎨 Color Fade' },
         edgeMajorBloomColor: { value: getInitialValue('edgeMajorBloomColor', '#ece2bc'), label: 'Major Color' },
         edgeMinorBloomColor: { value: getInitialValue('edgeMinorBloomColor', '#a6ceef'), label: 'Minor Color' },
@@ -164,6 +165,7 @@ export function GridLines({ isMajor }: GridLinesProps) {
         uniforms.uWaveAmplitude.value = waveConfig.waveAmplitude;
         uniforms.uWaveFrequency.value = waveConfig.waveFrequency;
         uniforms.uWaveSpeed.value = waveConfig.waveSpeed;
+        uniforms.uAudioWaveProgress.value = AudioMetrics.audioWaveProgress;
         uniforms.uPlayerPos.value.copy(playerPos);
         uniforms.uGridOffset.value.set(snappedPos.x, 0, snappedPos.z);
 

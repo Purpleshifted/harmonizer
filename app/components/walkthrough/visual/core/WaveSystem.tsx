@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useControls } from 'leva';
 import * as THREE from 'three';
+import { AudioMetrics } from '../../../../lib/audio/AudioMetrics';
 
 /**
  * Wave Terrain System
@@ -14,12 +15,35 @@ import * as THREE from 'three';
 
 // Wave configuration hook - call once at scene root level
 export function useWaveConfig() {
-    const config = useControls('Wave Terrain', {
-        waveAmplitude: { value: 1.2, min: 0, max: 5, step: 0.1, label: 'Amplitude' },
-        waveFrequency: { value: 0.08, min: 0.01, max: 0.5, step: 0.01, label: 'Frequency' },
-        waveSpeed: { value: 1.2, min: 0, max: 5, step: 0.1, label: 'Speed' },
-        defaultEyeLevel: { value: 7.0, min: 1, max: 20, step: 0.5, label: 'Eye Level' },
-    });
+    const [config, setConfig] = useControls('Wave Terrain', () => ({
+        waveAmplitude: { value: 0.7, min: 0, max: 5, step: 0.1, label: 'Amplitude' },
+        waveFrequency: { value: 0.05, min: 0.01, max: 0.5, step: 0.01, label: 'Frequency' },
+        waveSpeed: { value: 0.9, min: 0, max: 5, step: 0.1, label: 'Speed' },
+        defaultEyeLevel: { value: 5.0, min: 1, max: 20, step: 0.5, label: 'Eye Level' },
+    }));
+
+    // Eye level sync (Audio & Control)
+    useEffect(() => {
+        AudioMetrics.defaultEyeLevel = config.defaultEyeLevel;
+        AudioMetrics.waveParams.amplitude = config.waveAmplitude;
+        AudioMetrics.waveParams.frequency = config.waveFrequency;
+        AudioMetrics.waveParams.speed = config.waveSpeed;
+    }, [config.defaultEyeLevel, config.waveAmplitude, config.waveFrequency, config.waveSpeed]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setConfig({ defaultEyeLevel: Math.min(20, config.defaultEyeLevel + 0.5) });
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setConfig({ defaultEyeLevel: Math.max(1, config.defaultEyeLevel - 0.5) });
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [config.defaultEyeLevel, setConfig]);
 
     return config;
 }
@@ -43,8 +67,31 @@ export function getWaveHeight(
     // Tertiary wave (diagonal, faster, smaller)
     const wave3 = Math.sin((x + z) * frequency * 1.3 + time * speed * 1.2) * amplitude * 0.25;
 
-    // Combine waves
-    return wave1 + wave2 + wave3;
+    // Combine base waves
+    let height = wave1 + wave2 + wave3;
+
+    // Apply exact identical spatial wave synced crest mathematics
+    // The wave crashes specifically at the crest of the primary wave (Phase ~ 1.5707)
+    // Match the exact same trigger from Dirigent.ts:
+    const phase1 = x * frequency + time * speed;
+    const normCrest = (Math.sin(phase1) + 1.0) * 0.5;
+
+    // Trigger physical crest lift smoothly around the top 20% of the wave peak
+    if (normCrest > 0.8) {
+        const presence = (normCrest - 0.8) * 5.0; // 0.0 to 1.0
+        const audioCurve = Math.pow(presence, 1.5);
+
+        // Add extreme physical height when the Bloom Band passes directly under this (x,z) coordinate
+        height += audioCurve * amplitude * 1.5;
+    }
+
+    return height;
+}
+
+// simple helper purely for TS
+function smoothstep(min: number, max: number, value: number) {
+    const x = Math.max(0, Math.min(1, (value - min) / (max - min)));
+    return x * x * (3 - 2 * x);
 }
 
 // Precomputed wave data type for passing to children

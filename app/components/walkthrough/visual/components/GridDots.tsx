@@ -9,9 +9,10 @@ import { getNodeWorldPosition, getWorldToGrid } from '../../../../lib/tonnetz/to
 const VIEW_RADIUS = 100;
 const GRID_SIZE = VIEW_RADIUS * 2 + 1;
 const TOTAL_NODES = GRID_SIZE * GRID_SIZE;
-import { useWaveConfig } from '../core/WaveSystem';
 import { DetectionResult } from '../../shared/hooks/useSpatialDetection';
 import { getInitialValue } from '../core/Persistence';
+import { useWaveConfig } from '../core/WaveSystem';
+import { AudioMetrics } from '../../../../lib/audio/AudioMetrics';
 import { WAVE_UNIFORMS, WAVE_VERTEX_CHUNK } from '../shaders/wave.glsl';
 import { COMMON_UNIFORMS, COLOR_UNIFORMS, BLOOM_UNIFORMS, FRAGMENT_CHUNK } from '../shaders/visual_common.glsl';
 
@@ -45,7 +46,7 @@ export function GridDots({ setLocationInfo, onDetectionUpdate, isMajor }: GridDo
         nodeColorStart,
         nodeColorFade,
     } = useControls('Terrain Grid', {
-        dotSize: { value: getInitialValue('dotSize', 0.25), min: 0.02, max: 2.0 },
+        dotSize: { value: getInitialValue('dotSize', 0.05), min: 0.02, max: 2.0 },
         dotOpacity: { value: getInitialValue('dotOpacity', 0.8), min: 0, max: 1 },
         nodeBaseEmissive: { value: getInitialValue('nodeBaseEmissive', 1.2), min: 0.1, max: 15, label: '✨ Base Glow' },
         nodeMajorBloomColor: { value: getInitialValue('nodeMajorBloomColor', '#ffe28a') },
@@ -96,12 +97,15 @@ export function GridDots({ setLocationInfo, onDetectionUpdate, isMajor }: GridDo
             uniform float uSize;
             
             varying float vDist;
+            varying float vWaveCrest;
             
             void main() {
                 vec3 pos = position + uGridOffset;
                 
                 // Apply shared wave logic
-                pos = applyWave(pos);
+                WaveInfo wave = getWaveInfo(pos);
+                pos.y += wave.height;
+                vWaveCrest = wave.crest;
                 
                 vDist = distance(pos, uPlayerPos);
                 
@@ -119,6 +123,7 @@ export function GridDots({ setLocationInfo, onDetectionUpdate, isMajor }: GridDo
             uniform float uOpacity;
             uniform float uBaseEmissive;
             varying float vDist;
+            varying float vWaveCrest;
             
             void main() {
                 vec2 coord = gl_PointCoord - vec2(0.5);
@@ -136,8 +141,14 @@ export function GridDots({ setLocationInfo, onDetectionUpdate, isMajor }: GridDo
                 float colorFactor = getColorFactor(vDist);
                 vec3 finalColor = getFinalColor(colorFactor);
                 
+                // Saturate the color towards white/bright when the wave crest passes over
+                vec3 crestBoostColor = mix(finalColor, mix(finalColor, vec3(1.0), 0.5) * 1.5, vWaveCrest * 0.8);
+                
+                // Expand bloom highly when wave crest hits
+                bloomMultiplier += vWaveCrest * 15.0;
+                
                 float fogAlpha = getFogAlpha(vDist);
-                vec3 hdrColor = finalColor * uBaseEmissive * bloomMultiplier;
+                vec3 hdrColor = crestBoostColor * uBaseEmissive * bloomMultiplier;
                 
                 gl_FragColor = vec4(hdrColor, uOpacity * shapeAlpha * fogAlpha);
             }
@@ -167,6 +178,7 @@ export function GridDots({ setLocationInfo, onDetectionUpdate, isMajor }: GridDo
         dm.uniforms.uWaveAmplitude.value = waveConfig.waveAmplitude;
         dm.uniforms.uWaveFrequency.value = waveConfig.waveFrequency;
         dm.uniforms.uWaveSpeed.value = waveConfig.waveSpeed;
+        dm.uniforms.uAudioWaveProgress.value = AudioMetrics.audioWaveProgress;
         dm.uniforms.uPlayerPos.value.copy(playerPos);
         dm.uniforms.uGridOffset.value.set(snappedPos.x, 0, snappedPos.z);
 

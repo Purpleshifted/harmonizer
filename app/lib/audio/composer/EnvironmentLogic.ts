@@ -19,7 +19,7 @@ export class EnvironmentLogic {
     public calculateWaveParams(waveCycle: number, centerPos: THREE.Vector3, config: any) {
         const cyclePos = waveCycle % config.period;
         const cycleIndex = Math.floor(waveCycle / config.period);
-        const isStrong = cycleIndex % 10 === 0; // Only 1 in 10 waves is strong
+        const isStrong = cycleIndex % 5 === 0; // Only 1 in 10 waves is strong
 
         let intensity = config.baseVolume;
         let radius = 36;

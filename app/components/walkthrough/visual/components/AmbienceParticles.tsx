@@ -10,18 +10,23 @@ const VIEW_RADIUS = 100;
 import { useWaveConfig } from '../core/WaveSystem';
 import { getInitialValue } from '../core/Persistence';
 import { COMMON_UNIFORMS, COLOR_UNIFORMS } from '../shaders/visual_common.glsl';
+import { WAVE_UNIFORMS, WAVE_VERTEX_CHUNK } from '../shaders/wave.glsl';
+import { AudioMetrics } from '../../../../lib/audio/AudioMetrics';
 
 interface AmbienceParticlesProps {
     isMajor: boolean | null;
+    mode?: string;
 }
 
-export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
+export function AmbienceParticles({ isMajor, mode }: AmbienceParticlesProps) {
     const { camera, clock } = useThree();
     const pointsRef = useRef<THREE.Points>(null);
 
     // Smooth transitions
     const smoothMajorRef = useRef(0);
     const smoothNeutralRef = useRef(1.0);
+    const smoothNodeFactorRef = useRef(0.0);
+    const accumulatedRotationRef = useRef(0.0);
 
     const {
         dustCount,
@@ -36,11 +41,11 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
         dustMinorBloomColor,
         dustNeutralBloomColor,
     } = useControls('Ambience', {
-        dustCount: { value: getInitialValue('dustCount', 1200), min: 200, max: 10000 },
-        dustSize: { value: getInitialValue('dustSize', 0.3), min: 0.01, max: 1.0 },
-        dustOpacity: { value: getInitialValue('dustOpacity', 0.6), min: 0, max: 1 },
+        dustCount: { value: getInitialValue('dustCount', 300), min: 200, max: 10000 },
+        dustSize: { value: getInitialValue('dustSize', 0.25), min: 0.01, max: 1.0 },
+        dustOpacity: { value: getInitialValue('dustOpacity', 0.43), min: 0, max: 1 },
         dustSpeed: { value: getInitialValue('dustSpeed', 0.5), min: 0, max: 2 },
-        dustHeight: { value: getInitialValue('dustHeight', 45), min: 20, max: 200, label: '↕ Height Spread' },
+        dustHeight: { value: getInitialValue('dustHeight', 55), min: 20, max: 200, label: '↕ Height Spread' },
         dustSizeJitter: { value: getInitialValue('dustSizeJitter', 0.6), min: 0, max: 1, label: '🎲 Size Jitter' },
         dustHueJitter: { value: getInitialValue('dustHueJitter', 0.3), min: 0, max: 1, label: '🎲 Hue Jitter' },
         dustOpacityJitter: { value: getInitialValue('dustOpacityJitter', 0.5), min: 0, max: 1, label: '🎲 Opacity Jitter' },
@@ -70,6 +75,7 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
         uniforms: {
             ...COMMON_UNIFORMS(),
             ...COLOR_UNIFORMS(),
+            ...WAVE_UNIFORMS,
             uBoxSize: { value: VIEW_RADIUS * 2.5 },
             uHeight: { value: 80.0 },
             uSize: { value: 0.5 },
@@ -78,20 +84,31 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
             uSizeJitter: { value: 0.6 },
             uHueJitter: { value: 0.3 },
             uOpacityJitter: { value: 0.5 },
+            uNodeFactor: { value: 0.0 },
+            uNodeRotation: { value: 0.0 },
+            uAudioLevel: { value: 0.0 },
+            uCameraY: { value: 0.0 },
         },
         vertexShader: `
-            uniform float uTime;
+            ${WAVE_VERTEX_CHUNK}
             uniform vec3 uPlayerPos;
             uniform float uBoxSize;
             uniform float uHeight;
             uniform float uSize;
             uniform float uSpeed;
             uniform float uSizeJitter;
+            uniform float uNodeFactor;
+            uniform float uNodeRotation;
+            uniform float uAudioLevel;
             
             attribute float aRandom;
             varying float vAlpha;
             varying float vRandom;
+            varying float vAudioLevel;
             
+            // NEW UNIFORMS: pass real camera Y
+            uniform float uCameraY;
+
             void main() {
                 vec3 basePos = position;
                 vec3 relativePos = basePos - uPlayerPos;
@@ -100,21 +117,64 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
                 relativePos.y = mod(relativePos.y + uHeight * 0.5, uHeight) - uHeight * 0.5;
                 relativePos.z = mod(relativePos.z, uBoxSize) - uBoxSize * 0.5;
                 
+                // Height-based rotation speed multiplier
+                // Lower Y = faster spin, higher Y (closer to eye) = slower spin
+                // relativePos.y ranges roughly from -uHeight/2 to +uHeight/2
+                float heightFactor = 1.0 - smoothstep(0.0, -uHeight * 0.5, relativePos.y); 
+                float spinSpeedAdjust = mix(0.2, 1.5, heightFactor);
+
+                // Whirlpool swirling effect for Node mode
+                // uNodeRotation smoothly increases ONLY when Node mode is active.
+                float angle = uNodeRotation * (0.8 + aRandom * 0.4) * spinSpeedAdjust;
+                float c = cos(angle);
+                float s = sin(angle);
+                
+                // Calculate rotated coords
+                float rx = relativePos.x * c - relativePos.z * s;
+                float rz = relativePos.x * s + relativePos.z * c;
+
+                // Instead of mix(relativePos, rx, uNodeFactor) which rubberbands back on exit,
+                // we ALWAYS use the rotated coords. Rotation simply stops increasing when NodeFactor is 0.
+                relativePos.x = rx;
+                relativePos.z = rz;
+                
                 vec3 finalPos = relativePos + uPlayerPos;
                 
+                // Base brownian motion speed
                 float t = uTime * uSpeed;
                 float noiseX = sin(t * 1.1 + aRandom * 20.0) + sin(t * 0.4 + aRandom * 15.0);
                 float noiseY = sin(t * 1.3 + aRandom * 18.0) + cos(t * 0.6 + aRandom * 12.0);
                 float noiseZ = cos(t * 1.2 + aRandom * 22.0) + sin(t * 0.5 + aRandom * 10.0);
                 
-                finalPos += vec3(noiseX, noiseY, noiseZ) * 2.0;
-
                 float dist = distance(finalPos, uPlayerPos);
+                
+                // Audio reactivity: bump particles outward in random directions
+                vec3 bumpDir = normalize(vec3(noiseX, noiseY, noiseZ) + 0.1);
+                
+                // Audio bump is localized—stronger closer to player, very weak in distance
+                // High frequency components are also handled nicely since uAudioLevel is aggregated
+                float distJumpFactor = 1.0 - smoothstep(0.0, uBoxSize * 0.5, dist); // Expanded radius
+                float audioJump = uAudioLevel * 10.0 * (0.5 + aRandom) * distJumpFactor;
+                
+                // Get absolute world wave data
+                WaveInfo wave = getWaveInfo(finalPos);
+                
+                // Apply final movements
+                finalPos += vec3(noiseX, noiseY, noiseZ) * mix(2.0, 0.5, uNodeFactor);
+                finalPos += bumpDir * audioJump * (1.0 - uNodeFactor); // Only bump when NOT in node mode
+                
+                // Tidal wave sweep! Particles get pulled by the wave's force and gently bob up
+                finalPos += wave.sweepForce * (1.0 - uNodeFactor);
+                finalPos.y += wave.height * 0.3 * (1.0 - uNodeFactor);
+                
+                // Re-evaluate dist after bumps
+                dist = distance(finalPos, uPlayerPos);
                 float distNorm = dist / (uBoxSize * 0.5);
                 vAlpha = 1.0 - smoothstep(0.7, 1.0, distNorm);
                 
-                // Pass random to fragment for jitter
+                // Pass variables to fragment shader
                 vRandom = aRandom;
+                vAudioLevel = uAudioLevel;
                 
                 vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
                 
@@ -137,6 +197,8 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
             uniform float uOpacityJitter;
             varying float vAlpha;
             varying float vRandom;
+            varying float vAudioLevel;
+            uniform float uNodeFactor;
             
             // Attempt hue rotation on RGB
             vec3 hueShift(vec3 color, float shift) {
@@ -166,18 +228,28 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
                 vec3 activeColor = mix(uMinorColor, uMajorColor, uSmoothMajor);
                 vec3 finalColor = mix(activeColor, uNeutralColor, uSmoothNeutral);
                 
+                // Hue jitter & Opacity Jitter is suppressed during Node mode for uniform, clean look
+                float currentHueJitter = mix(uHueJitter, 0.0, uNodeFactor);
+                float currentOpacityJitter = mix(uOpacityJitter, 0.0, uNodeFactor);
+                
                 // Hue jitter: per-particle hue rotation
                 float hueRand = fract(vRandom * 7.91);
-                float hueAngle = (hueRand - 0.5) * uHueJitter * 3.14159;
+                float hueAngle = (hueRand - 0.5) * currentHueJitter * 3.14159;
                 finalColor = hueShift(finalColor, hueAngle);
                 
                 // Opacity jitter: per-particle transparency variation
                 float opacityRand = fract(vRandom * 23.45);
-                float opacityMultiplier = mix(1.0 - uOpacityJitter, 1.0, opacityRand);
+                float opacityMultiplier = mix(1.0 - currentOpacityJitter, 1.0, opacityRand);
                 
                 vec3 hdrColor = finalColor * 10.0;
                 
-                gl_FragColor = vec4(hdrColor, uOpacity * vAlpha * shape * opacityMultiplier);
+                // Edge Audio Reactivity - bump bloom brightness ONLY, removed opacity influence
+                float bloomBoost = (1.0 + vAudioLevel * 10.0) * (1.0 - uNodeFactor); 
+                hdrColor *= mix(1.0, bloomBoost, 1.0 - uNodeFactor); // Only applies when not in node mode
+                
+                float finalOpacity = uOpacity * vAlpha * shape * opacityMultiplier;
+                
+                gl_FragColor = vec4(hdrColor, finalOpacity);
             }
         `,
         transparent: true,
@@ -197,9 +269,24 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
         smoothMajorRef.current = THREE.MathUtils.lerp(smoothMajorRef.current, targetMajor, delta * lerpSpeed);
         smoothNeutralRef.current = THREE.MathUtils.lerp(smoothNeutralRef.current, targetNeutral, delta * lerpSpeed);
 
+        const targetNodeFactor = mode === 'node' ? 1.0 : 0.0;
+        smoothNodeFactorRef.current = THREE.MathUtils.lerp(smoothNodeFactorRef.current, targetNodeFactor, delta * 2.0);
+
+        // Accumulate rotation smoothly only when node factor > 0
+        const rotationSpeed = 0.15; // Slowed down from 0.4
+        accumulatedRotationRef.current += delta * rotationSpeed * smoothNodeFactorRef.current;
+
         const dm = dustMaterial;
         dm.uniforms.uTime.value = clock.getElapsedTime();
         dm.uniforms.uPlayerPos.value.copy(playerPos);
+
+        // Pass wave properties to drive the sweeping motion
+        // AmbienceParticles does not have it, let's just read from AudioMetrics waveParams
+        dm.uniforms.uWaveAmplitude.value = AudioMetrics.waveParams.amplitude;
+        dm.uniforms.uWaveFrequency.value = AudioMetrics.waveParams.frequency;
+        dm.uniforms.uWaveSpeed.value = AudioMetrics.waveParams.speed;
+        dm.uniforms.uAudioWaveProgress.value = AudioMetrics.audioWaveProgress;
+
         dm.uniforms.uSpeed.value = dustSpeed;
         dm.uniforms.uSize.value = dustSize;
         dm.uniforms.uOpacity.value = dustOpacity;
@@ -207,6 +294,11 @@ export function AmbienceParticles({ isMajor }: AmbienceParticlesProps) {
         dm.uniforms.uSizeJitter.value = dustSizeJitter;
         dm.uniforms.uHueJitter.value = dustHueJitter;
         dm.uniforms.uOpacityJitter.value = dustOpacityJitter;
+        dm.uniforms.uNodeFactor.value = smoothNodeFactorRef.current;
+        dm.uniforms.uNodeRotation.value = accumulatedRotationRef.current;
+        dm.uniforms.uCameraY.value = playerPos.y;
+        // Edge level smoothing for visuals
+        dm.uniforms.uAudioLevel.value = mode === 'edge' ? AudioMetrics.edgeLevel : 0.0;
 
         dm.uniforms.uMajorColor.value.set(dustMajorBloomColor.slice(0, 7));
         dm.uniforms.uMinorColor.value.set(dustMinorBloomColor.slice(0, 7));

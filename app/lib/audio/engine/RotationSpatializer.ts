@@ -54,13 +54,16 @@ export class RotationSpatializer extends Tone.ToneAudioNode {
         // Normalize to -PI..PI
         const relNorm = Math.atan2(Math.sin(rel), Math.cos(rel));
 
-        // Constant-power pan: gainL = cos((rel+PI/2)/2), gainR = sin((rel+PI/2)/2)
-        const pan = (relNorm + Math.PI / 2) / 2;
-        const gL = Math.max(0, Math.cos(pan));
-        const gR = Math.max(0, Math.sin(pan));
+        // x goes from -1 (Left) to +1 (Right)
+        const x = -Math.sin(relNorm);
 
-        // ITD: sound on right → R hears first → delay L more
-        const itd = Math.sin(relNorm) * MAX_ITD_SEC;
+        // Constant-power pan: mapped cleanly for ALL 360 directions
+        const panAngle = (x + 1) * Math.PI / 4;
+        const gL = Math.max(0, Math.cos(panAngle));
+        const gR = Math.max(0, Math.sin(panAngle));
+
+        // ITD: sound on right (x > 0) → R hears first → delay L more
+        const itd = x * MAX_ITD_SEC;
         const dL = Math.max(0, itd);
         const dR = Math.max(0, -itd);
 

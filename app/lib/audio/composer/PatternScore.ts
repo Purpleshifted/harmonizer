@@ -64,8 +64,11 @@ export class PatternScore {
         const notes = isMajor ? sortNotesByPitchDesc(faceNotes) : sortNotesByPitch(faceNotes);
         const patternEvents: (string | null)[] = new Array(preset.patternLength).fill(null);
         const length = preset.patternLength;
-        const step = Math.max(1, Math.floor(length / notes.length));
+        // 음 간격을 약간 띄워줍니다 (간격이 1이면 너무 좁고, 전체 분산시키면 너무 멂)
+        // step = 2 로 하면 8n 기준으로 한 박자(4n) 간격으로 재생됩니다.
+        const step = 2;
         for (let i = 0; i < notes.length; i++) {
+            // 사이클마다 시작 위치를 조금씩 밀지만, 세 음이 뿔뿔이 흩어지지는 않음
             const baseSlot = (i * step + cycleIndex) % length;
             patternEvents[baseSlot] = notes[i];
         }

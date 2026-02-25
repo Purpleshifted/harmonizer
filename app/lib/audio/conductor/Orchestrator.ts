@@ -128,6 +128,7 @@ export class Orchestrator {
         // 5. Global parameters (listenerForward for wave rotation-based spatializer)
         const globalData = {
             centerPos: detection.centerPos || new THREE.Vector3(),
+            cameraY: camera.position.y,
             delta: delta,
             listenerForward: currentForward,
         };

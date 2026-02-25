@@ -47,11 +47,11 @@ export const EDGE_SOUND_PRESET: ArpSoundPreset = {
 /** Face: sine, medium envelope */
 export const FACE_SOUND_PRESET: ArpSoundPreset = {
     type: 'sine',
-    attack: 20,
-    decay: 300,
-    sustain: 0.2,
-    release: 600,
-    duration: 0.5,
+    attack: 120,
+    decay: 340,
+    sustain: 0.25,
+    release: 800,
+    duration: 0.75,
 };
 
 export const ARP_SOUND_PRESETS: Record<ArpMode, ArpSoundPreset> = {

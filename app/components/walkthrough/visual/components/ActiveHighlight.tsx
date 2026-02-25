@@ -9,6 +9,7 @@ import { getAdjacentNodes, getNodeWorldPosition } from '../../../../lib/tonnetz/
 import { getInitialValue } from '../core/Persistence';
 import { useWaveConfigContext, getWaveHeight } from '../core/WaveSystem';
 import { WAVE_UNIFORMS, WAVE_VERTEX_CHUNK } from '../shaders/wave.glsl';
+import { AudioMetrics } from '../../../../lib/audio/AudioMetrics';
 
 interface ActiveHighlightProps {
     mode: 'node' | 'edge' | 'face';
@@ -235,12 +236,33 @@ export function ActiveHighlight({ mode, activeNodes, isMajor }: ActiveHighlightP
         let spriteTargets: { pos: THREE.Vector3; pulse: number }[] = [];
         if (mode === 'node' && activeNodes.length >= 1) {
             spriteTargets.push({ pos: activeNodes[0].pos, pulse: 0.5 + Math.sin(time * hlPulseSpeed) * 0.5 });
+
+            const lastTrigger = AudioMetrics.lastNodeTrigger;
+            // time is elapsed react-three-fiber time, but AudioContext time could be different.
+            // Using system time safely guarantees matching coordinate space with the trigger time.
+            const now = performance.now() / 1000;
+            const timeSinceTrigger = now - lastTrigger.time;
+
             const adj = getAdjacentNodes(activeNodes[0].u, activeNodes[0].v);
             adj.forEach(({ u, v }, i) => {
+                const nodePos = getNodeWorldPosition(u, v);
+                let hitPulse = 0;
+
+                // If recently played (within 0.35s) and position matches roughly
+                if (Math.abs(nodePos.x - lastTrigger.pos.x) < 0.1 &&
+                    Math.abs(nodePos.z - lastTrigger.pos.z) < 0.1 &&
+                    timeSinceTrigger >= 0 && timeSinceTrigger < 0.35) {
+
+                    hitPulse = Math.max(0, 1.0 - (timeSinceTrigger / 0.35)) * 4.0; // bright flash
+                }
+
+                // Subtle rotation background
                 const phase = i / 6;
                 const cyclePos = (time * hlPulseSpeed * 0.3) % 1;
                 const diff = Math.abs(cyclePos - phase);
-                spriteTargets.push({ pos: getNodeWorldPosition(u, v), pulse: Math.max(0, 1 - Math.min(diff, 1 - diff) * 6) });
+                const ambientPulse = Math.max(0, 1 - Math.min(diff, 1 - diff) * 6) * 0.3;
+
+                spriteTargets.push({ pos: nodePos, pulse: Math.max(ambientPulse, hitPulse) });
             });
         } else if (mode === 'edge' && activeNodes.length >= 2) {
             const p = 0.5 + Math.sin(time * hlPulseSpeed) * 0.5;
@@ -324,6 +346,7 @@ export function ActiveHighlight({ mode, activeNodes, isMajor }: ActiveHighlightP
             lineMat.uniforms.uWaveAmplitude.value = waveConfig.waveAmplitude;
             lineMat.uniforms.uWaveFrequency.value = waveConfig.waveFrequency;
             lineMat.uniforms.uWaveSpeed.value = waveConfig.waveSpeed;
+            lineMat.uniforms.uAudioWaveProgress.value = AudioMetrics.audioWaveProgress;
         }
 
         // --- FACE ---
@@ -343,6 +366,7 @@ export function ActiveHighlight({ mode, activeNodes, isMajor }: ActiveHighlightP
             faceMat.uniforms.uWaveAmplitude.value = waveConfig.waveAmplitude;
             faceMat.uniforms.uWaveFrequency.value = waveConfig.waveFrequency;
             faceMat.uniforms.uWaveSpeed.value = waveConfig.waveSpeed;
+            faceMat.uniforms.uAudioWaveProgress.value = AudioMetrics.audioWaveProgress;
         }
     });
 

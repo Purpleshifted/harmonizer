@@ -15,9 +15,9 @@ export function PostProcessing() {
         exposure
     } = useControls('Environment.PostProcessing', {
         bloomEnabled: { value: true },
-        bloomThreshold: { value: getInitialValue('bloomThreshold', 0.89), min: 0, max: 2, step: 0.05 },
-        bloomIntensity: { value: getInitialValue('bloomIntensity', 5.0), min: 0, max: 5, step: 0.1 },
-        bloomRadius: { value: getInitialValue('bloomRadius', 0.6), min: 0, max: 1, step: 0.05 },
+        bloomThreshold: { value: getInitialValue('bloomThreshold', 1.19), min: 0, max: 2, step: 0.05 },
+        bloomIntensity: { value: getInitialValue('bloomIntensity', 4.2), min: 0, max: 5, step: 0.1 },
+        bloomRadius: { value: getInitialValue('bloomRadius', 0.3), min: 0, max: 1, step: 0.05 },
         noiseOpacity: { value: getInitialValue('noiseOpacity', 0.02), min: 0, max: 0.2, step: 0.01 },
         exposure: { value: getInitialValue('exposure', 1.0), min: 0.1, max: 5, step: 0.1, label: '📷 Exposure' },
     });

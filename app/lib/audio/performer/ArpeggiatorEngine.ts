@@ -4,6 +4,7 @@
  * Edge mode: TWO ArpEngineWorklets (one per edge endpoint).
  */
 import * as Tone from 'tone';
+import { AudioMetrics } from '../AudioMetrics';
 import * as THREE from 'three';
 import { createSpatialPanner, updatePannerPosition } from '../utils/SpatialAudio';
 import { createDelay } from '../engine/ReverbFactory';
@@ -55,6 +56,11 @@ export class ArpeggiatorEngine {
     private faceSeqCallbackCount = 0;
     public faceCycleComplete = false;
 
+    // Visual Metrics
+    private edgeMeter: Tone.Meter | null = null;
+    private currentEdgeVisLevel: number = 0;
+    private updateInterval: NodeJS.Timeout | null = null;
+
     // Edge effect chain
     private edgeFilter: Tone.Filter | null = null;
     private edgeDelay: Tone.FeedbackDelay | null = null;
@@ -73,12 +79,28 @@ export class ArpeggiatorEngine {
         this.setupNodeMode();
         this.setupEdgeMode();
         this.setupFaceMode();
+
+        this.edgeMeter = new Tone.Meter({ normalRange: true });
+        if (this.edgeGain1) this.edgeGain1.connect(this.edgeMeter);
+        if (this.edgeGain2) this.edgeGain2.connect(this.edgeMeter);
+
+        this.updateInterval = setInterval(() => {
+            if (!this.isDisposed && this.edgeMeter) {
+                // edgeMeter.getValue() returns normal range (0..1)
+                const rawVal = this.edgeMeter.getValue() as number;
+                // Smooth the audio level to remove erratic jitter
+                // Ascends quickly (0.4), descends gracefully (0.08) for organic trailing
+                const factor = rawVal > this.currentEdgeVisLevel ? 0.4 : 0.08;
+                this.currentEdgeVisLevel += (rawVal - this.currentEdgeVisLevel) * factor;
+                AudioMetrics.edgeLevel = this.currentEdgeVisLevel;
+            }
+        }, 16); // roughly 60fps
     }
 
     private setupNodeMode() {
         this.nodeArp = new ArpEngineWorklet({ mode: 'node' });
         this.nodeArpGain = new Tone.Gain(1.5);
-        this.nodePanner = createSpatialPanner({ useHRTF: true, refDistance: 4, maxDistance: 40 });
+        this.nodePanner = createSpatialPanner({ useHRTF: true, refDistance: 1.5, maxDistance: 25 });
         this.nodeArp.output.connect(this.nodeArpGain);
         this.nodeArpGain.connect(this.nodePanner);
         this.nodePanner.connect(this.ports.main as unknown as Tone.ToneAudioNode);
@@ -150,7 +172,8 @@ export class ArpeggiatorEngine {
         this.faceArp = new ArpEngineWorklet({ mode: 'face' });
         this.faceGain = new Tone.Gain(1);
         this.faceFilter = new Tone.Filter({ type: 'lowpass', frequency: 1200 });
-        this.faceDelay = createDelay('4n.', 0.2, 0.3);
+        // Keep delay very subtle so it creates space but doesn't sound like a double-trigger
+        this.faceDelay = createDelay('4n.', 0.1, 0.08);
 
         this.faceArp.output.connect(this.faceFilter!);
         this.faceFilter!.connect(this.faceDelay!);
@@ -180,12 +203,18 @@ export class ArpeggiatorEngine {
         );
     }
 
-    /** Node mode: random trigger (called from Dirigent.conductNode) */
     trigger(note: string, velocity: number, position: THREE.Vector3, time: number): void {
         if (this.isDisposed || !this.nodeArp || !this.nodePanner) return;
         updatePannerPosition(this.nodePanner, position, 0.1);
         const freq = noteToFreq(note);
         const duration = NODE_MODE_LOGIC_PRESET.noteDuration;
+
+        // Share with visuals
+        AudioMetrics.lastNodeTrigger.time = performance.now() / 1000; // Use system time for visual sync
+        AudioMetrics.lastNodeTrigger.pos.x = position.x;
+        AudioMetrics.lastNodeTrigger.pos.y = position.y;
+        AudioMetrics.lastNodeTrigger.pos.z = position.z;
+
         this.nodeArp.trigger(freq, velocity, time, duration);
     }
 
@@ -277,6 +306,11 @@ export class ArpeggiatorEngine {
         if (this.isDisposed) return;
         this.isDisposed = true;
 
+        if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+            this.updateInterval = null;
+        }
+
         this.nodeArp?.dispose();
         this.nodeArpGain?.dispose();
         this.nodePanner?.dispose();
@@ -300,5 +334,6 @@ export class ArpeggiatorEngine {
         this.edgeDelay?.dispose();
         this.edgeLimiter?.dispose();
         this.masterGain?.dispose();
+        this.edgeMeter?.dispose();
     }
 }
