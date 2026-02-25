@@ -27,9 +27,7 @@ import { preloadReverbs } from '../../../lib/audio/engine/ReverbFactory';
 import { preloadWaveBuffer } from '../../../lib/audio/sources/WaveBufferCache';
 
 interface UnifiedSceneLogicProps {
-    detection: DetectionResult | null;
-    onLocationUpdate: (info: string, type: string) => void;
-    handleDetectionUpdate: (res: DetectionResult | null) => void;
+    detectionRef: React.MutableRefObject<DetectionResult | null>;
     forward: boolean;
     backward: boolean;
     left: boolean;
@@ -37,9 +35,7 @@ interface UnifiedSceneLogicProps {
 }
 
 function UnifiedSceneLogic({
-    detection,
-    onLocationUpdate,
-    handleDetectionUpdate,
+    detectionRef,
     forward,
     backward,
     left,
@@ -79,9 +75,7 @@ function UnifiedSceneLogic({
 
     return (
         <VisualElements
-            detection={detection}
-            onLocationUpdate={onLocationUpdate}
-            handleDetectionUpdate={handleDetectionUpdate}
+            detectionRef={detectionRef}
         />
     );
 }
@@ -93,8 +87,6 @@ interface SceneContentProps {
 }
 
 function SceneContent({ onLocationUpdate, isAudioReady, setIsAudioReady }: SceneContentProps) {
-    const [detection, setDetection] = useState<DetectionResult | null>(null);
-
     const { forward, backward, left, right } = usePlayerControls();
     const isMoving = forward || backward || left || right;
     const keyHoldSecRef = useKeyHoldDuration(isMoving);
@@ -102,7 +94,7 @@ function SceneContent({ onLocationUpdate, isAudioReady, setIsAudioReady }: Scene
     const detectionRef = useSpatialDetection({
         isMoving,
         onDetectionUpdate: (res) => {
-            setDetection(res);
+            // Update UI overlay string, but do not trigger full react tree re-render
             onLocationUpdate(res.displayInfo, res.displayType);
         }
     });
@@ -111,9 +103,7 @@ function SceneContent({ onLocationUpdate, isAudioReady, setIsAudioReady }: Scene
         <>
             <WaveSystem>
                 <UnifiedSceneLogic
-                    detection={detection}
-                    onLocationUpdate={onLocationUpdate}
-                    handleDetectionUpdate={setDetection}
+                    detectionRef={detectionRef}
                     forward={forward}
                     backward={backward}
                     left={left}

@@ -17,10 +17,10 @@ import { WAVE_UNIFORMS, WAVE_VERTEX_CHUNK } from '../shaders/wave.glsl';
 import { COMMON_UNIFORMS, COLOR_UNIFORMS, BLOOM_UNIFORMS, FRAGMENT_CHUNK } from '../shaders/visual_common.glsl';
 
 interface GridLinesProps {
-    isMajor?: boolean | null;
+    detectionRef: React.MutableRefObject<DetectionResult | null>;
 }
 
-export function GridLines({ isMajor }: GridLinesProps) {
+export function GridLines({ detectionRef }: GridLinesProps) {
     const { camera, clock } = useThree();
     const linesRef = useRef<THREE.LineSegments>(null);
     const smoothMajorRef = useRef(0.0);
@@ -152,6 +152,7 @@ export function GridLines({ isMajor }: GridLinesProps) {
         const { u: centerU, v: centerV } = getWorldToGrid(playerPos.x, playerPos.z);
         const snappedPos = getNodeWorldPosition(centerU, centerV);
 
+        const isMajor = detectionRef.current?.isMajor ?? null;
         const targetMajor = isMajor === true ? 1.0 : 0.0;
         const isNeutral = (isMajor === null || isMajor === undefined);
         const targetNeutral = isNeutral ? 1.0 : 0.0;

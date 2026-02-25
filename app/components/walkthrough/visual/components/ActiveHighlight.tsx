@@ -4,7 +4,7 @@ import React, { useRef, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useControls } from 'leva';
-import { type NodeCandidate } from '../../shared/hooks/useSpatialDetection';
+import { type NodeCandidate, type DetectionResult } from '../../shared/hooks/useSpatialDetection';
 import { getAdjacentNodes, getNodeWorldPosition } from '../../../../lib/tonnetz/tonnetz-grid';
 import { getInitialValue } from '../core/Persistence';
 import { useWaveConfigContext, getWaveHeight } from '../core/WaveSystem';
@@ -12,9 +12,7 @@ import { WAVE_UNIFORMS, WAVE_VERTEX_CHUNK } from '../shaders/wave.glsl';
 import { AudioMetrics } from '../../../../lib/audio/AudioMetrics';
 
 interface ActiveHighlightProps {
-    mode: 'node' | 'edge' | 'face';
-    activeNodes: NodeCandidate[];
-    isMajor: boolean | null;
+    detectionRef: React.MutableRefObject<DetectionResult | null>;
 }
 
 const MAX_SPRITES = 7;
@@ -60,7 +58,7 @@ interface SpriteSlot {
     currentScale: number;
 }
 
-export function ActiveHighlight({ mode, activeNodes, isMajor }: ActiveHighlightProps) {
+export function ActiveHighlight({ detectionRef }: ActiveHighlightProps) {
     const { clock, camera } = useThree();
     const waveConfig = useWaveConfigContext();
 
@@ -216,6 +214,10 @@ export function ActiveHighlight({ mode, activeNodes, isMajor }: ActiveHighlightP
         const fadeRate = hlFadeSpeed * delta;
 
         // --- Color ---
+        const det = detectionRef.current;
+        const mode = det?.mode ?? 'face';
+        const activeNodes = det?.activeNodes ?? [];
+        const isMajor = det?.isMajor ?? null;
         const targetMajor = isMajor === true ? 1.0 : 0.0;
         const isNeutralMode = mode === 'node' || mode === 'edge';
         const targetNeutral = isNeutralMode ? 0.6 : 0.0;

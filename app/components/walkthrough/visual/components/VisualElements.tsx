@@ -12,9 +12,7 @@ import { Stars } from './Stars';
 import { DetectionResult } from '../../shared/hooks/useSpatialDetection';
 
 interface VisualElementsProps {
-    detection: DetectionResult | null;
-    onLocationUpdate: (info: string, type: string) => void;
-    handleDetectionUpdate: (res: DetectionResult | null) => void;
+    detectionRef: React.MutableRefObject<DetectionResult | null>;
 }
 
 /**
@@ -22,7 +20,7 @@ interface VisualElementsProps {
  * Encapsulates the visual environment (fog, lights) and the visual component stack.
  * Does NOT contain camera logic or player controls.
  */
-export function VisualElements({ detection, onLocationUpdate, handleDetectionUpdate }: VisualElementsProps) {
+export function VisualElements({ detectionRef }: VisualElementsProps) {
     return (
         <>
             {/* Environment Settings */}
@@ -32,20 +30,10 @@ export function VisualElements({ detection, onLocationUpdate, handleDetectionUpd
             {/* Visual Components */}
             <Persistence />
             <Stars />
-            <GridDots
-                setLocationInfo={onLocationUpdate}
-                onDetectionUpdate={handleDetectionUpdate}
-                isMajor={detection?.isMajor ?? null}
-            />
-            <GridLines isMajor={detection?.isMajor ?? null} />
-            <AmbienceParticles isMajor={detection?.isMajor ?? null} mode={detection?.mode ?? 'none'} />
-            {detection && (
-                <ActiveHighlight
-                    mode={detection.mode}
-                    activeNodes={detection.activeNodes}
-                    isMajor={detection.isMajor ?? null}
-                />
-            )}
+            <GridDots detectionRef={detectionRef} />
+            <GridLines detectionRef={detectionRef} />
+            <AmbienceParticles detectionRef={detectionRef} />
+            <ActiveHighlight detectionRef={detectionRef} />
             <NodeLabels />
             <PostProcessing />
         </>

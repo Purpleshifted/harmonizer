@@ -17,12 +17,10 @@ import { WAVE_UNIFORMS, WAVE_VERTEX_CHUNK } from '../shaders/wave.glsl';
 import { COMMON_UNIFORMS, COLOR_UNIFORMS, BLOOM_UNIFORMS, FRAGMENT_CHUNK } from '../shaders/visual_common.glsl';
 
 interface GridDotsProps {
-    setLocationInfo: (info: string, type: string) => void;
-    onDetectionUpdate: (detection: DetectionResult | null) => void;
-    isMajor?: boolean | null;
+    detectionRef: React.MutableRefObject<DetectionResult | null>;
 }
 
-export function GridDots({ setLocationInfo, onDetectionUpdate, isMajor }: GridDotsProps) {
+export function GridDots({ detectionRef }: GridDotsProps) {
     const { camera, clock } = useThree();
     const groupRef = useRef<THREE.Group>(null);
     const dotsRef = useRef<THREE.Points>(null);
@@ -163,6 +161,7 @@ export function GridDots({ setLocationInfo, onDetectionUpdate, isMajor }: GridDo
         const { u: centerU, v: centerV } = getWorldToGrid(playerPos.x, playerPos.z);
         const snappedPos = getNodeWorldPosition(centerU, centerV);
 
+        const isMajor = detectionRef.current?.isMajor ?? null;
         const targetMajor = isMajor === true ? 1.0 : 0.0;
         const isNeutral = (isMajor === null || isMajor === undefined);
         const targetNeutral = isNeutral ? 1.0 : 0.0;

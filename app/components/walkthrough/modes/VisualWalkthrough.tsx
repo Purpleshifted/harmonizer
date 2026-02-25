@@ -19,9 +19,7 @@ import { WaveSystem, useWaveConfigContext, getWaveHeight } from '../visual/core/
 import { VisualElements } from '../visual/components/VisualElements';
 
 interface VisualSceneLogicProps {
-    detection: DetectionResult | null;
-    onLocationUpdate: (info: string, type: string) => void;
-    handleDetectionUpdate: (res: DetectionResult | null) => void;
+    detectionRef: React.MutableRefObject<DetectionResult | null>;
     forward: boolean;
     backward: boolean;
     left: boolean;
@@ -29,9 +27,7 @@ interface VisualSceneLogicProps {
 }
 
 function VisualSceneLogic({
-    detection,
-    onLocationUpdate,
-    handleDetectionUpdate,
+    detectionRef,
     forward,
     backward,
     left,
@@ -71,9 +67,7 @@ function VisualSceneLogic({
 
     return (
         <VisualElements
-            detection={detection}
-            onLocationUpdate={onLocationUpdate}
-            handleDetectionUpdate={handleDetectionUpdate}
+            detectionRef={detectionRef}
         />
     );
 }
@@ -83,14 +77,11 @@ interface SceneContentProps {
 }
 
 function SceneContent({ onLocationUpdate }: SceneContentProps) {
-    const [detection, setDetection] = useState<DetectionResult | null>(null);
-
     const { forward, backward, left, right } = usePlayerControls();
 
-    useSpatialDetection({
+    const detectionRef = useSpatialDetection({
         isMoving: forward || backward || left || right,
         onDetectionUpdate: (res) => {
-            setDetection(res);
             onLocationUpdate(res.displayInfo, res.displayType);
         }
     });
@@ -98,9 +89,7 @@ function SceneContent({ onLocationUpdate }: SceneContentProps) {
     return (
         <WaveSystem>
             <VisualSceneLogic
-                detection={detection}
-                onLocationUpdate={onLocationUpdate}
-                handleDetectionUpdate={setDetection}
+                detectionRef={detectionRef}
                 forward={forward}
                 backward={backward}
                 left={left}

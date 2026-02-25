@@ -7,6 +7,7 @@ import { useControls } from 'leva';
 import { getNodeWorldPosition } from '../../../../lib/tonnetz/tonnetz-grid';
 
 const VIEW_RADIUS = 100;
+import { DetectionResult } from '../../shared/hooks/useSpatialDetection';
 import { useWaveConfig } from '../core/WaveSystem';
 import { getInitialValue } from '../core/Persistence';
 import { COMMON_UNIFORMS, COLOR_UNIFORMS } from '../shaders/visual_common.glsl';
@@ -14,11 +15,10 @@ import { WAVE_UNIFORMS, WAVE_VERTEX_CHUNK } from '../shaders/wave.glsl';
 import { AudioMetrics } from '../../../../lib/audio/AudioMetrics';
 
 interface AmbienceParticlesProps {
-    isMajor: boolean | null;
-    mode?: string;
+    detectionRef: React.MutableRefObject<DetectionResult | null>;
 }
 
-export function AmbienceParticles({ isMajor, mode }: AmbienceParticlesProps) {
+export function AmbienceParticles({ detectionRef }: AmbienceParticlesProps) {
     const { camera, clock } = useThree();
     const pointsRef = useRef<THREE.Points>(null);
 
@@ -267,6 +267,8 @@ export function AmbienceParticles({ isMajor, mode }: AmbienceParticlesProps) {
     useFrame((_, delta) => {
         const playerPos = camera.position;
 
+        const isMajor = detectionRef.current?.isMajor ?? null;
+        const mode = detectionRef.current?.mode ?? 'none';
         const targetMajor = isMajor === true ? 1.0 : 0.0;
         const isNeutral = (isMajor === null || isMajor === undefined);
         const targetNeutral = isNeutral ? 1.0 : 0.0;
