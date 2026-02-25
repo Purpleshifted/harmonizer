@@ -61,7 +61,7 @@ interface SpriteSlot {
 }
 
 export function ActiveHighlight({ mode, activeNodes, isMajor }: ActiveHighlightProps) {
-    const { clock } = useThree();
+    const { clock, camera } = useThree();
     const waveConfig = useWaveConfigContext();
 
     const groupRef = useRef<THREE.Group>(null);
@@ -346,7 +346,13 @@ export function ActiveHighlight({ mode, activeNodes, isMajor }: ActiveHighlightP
             lineMat.uniforms.uWaveAmplitude.value = waveConfig.waveAmplitude;
             lineMat.uniforms.uWaveFrequency.value = waveConfig.waveFrequency;
             lineMat.uniforms.uWaveSpeed.value = waveConfig.waveSpeed;
-            lineMat.uniforms.uAudioWaveProgress.value = AudioMetrics.audioWaveProgress;
+
+            const ws = AudioMetrics.waveState;
+            lineMat.uniforms.uWaveActive.value = ws.active ? 1 : 0;
+            lineMat.uniforms.uWaveProgress.value = ws.progress;
+            lineMat.uniforms.uWaveAngle.value = ws.angle;
+            lineMat.uniforms.uWaveIsStrong.value = ws.isStrong ? 1 : 0;
+            lineMat.uniforms.uPlayerWorldPos.value.copy(camera.position);
         }
 
         // --- FACE ---
@@ -366,7 +372,13 @@ export function ActiveHighlight({ mode, activeNodes, isMajor }: ActiveHighlightP
             faceMat.uniforms.uWaveAmplitude.value = waveConfig.waveAmplitude;
             faceMat.uniforms.uWaveFrequency.value = waveConfig.waveFrequency;
             faceMat.uniforms.uWaveSpeed.value = waveConfig.waveSpeed;
-            faceMat.uniforms.uAudioWaveProgress.value = AudioMetrics.audioWaveProgress;
+
+            const ws = AudioMetrics.waveState;
+            faceMat.uniforms.uWaveActive.value = ws.active ? 1 : 0;
+            faceMat.uniforms.uWaveProgress.value = ws.progress;
+            faceMat.uniforms.uWaveAngle.value = ws.angle;
+            faceMat.uniforms.uWaveIsStrong.value = ws.isStrong ? 1 : 0;
+            faceMat.uniforms.uPlayerWorldPos.value.copy(camera.position);
         }
     });
 

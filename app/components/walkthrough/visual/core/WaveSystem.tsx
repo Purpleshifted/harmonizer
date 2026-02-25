@@ -70,19 +70,29 @@ export function getWaveHeight(
     // Combine base waves
     let height = wave1 + wave2 + wave3;
 
-    // Apply exact identical spatial wave synced crest mathematics
-    // The wave crashes specifically at the crest of the primary wave (Phase ~ 1.5707)
-    // Match the exact same trigger from Dirigent.ts:
-    const phase1 = x * frequency + time * speed;
-    const normCrest = (Math.sin(phase1) + 1.0) * 0.5;
+    // We check the centralized WaveState to explicitly mirror Shader logic
 
-    // Trigger physical crest lift smoothly around the top 20% of the wave peak
-    if (normCrest > 0.8) {
-        const presence = (normCrest - 0.8) * 5.0; // 0.0 to 1.0
-        const audioCurve = Math.pow(presence, 1.5);
+    if (AudioMetrics && AudioMetrics.waveState && AudioMetrics.waveState.active) {
+        const ws = AudioMetrics.waveState;
 
-        // Add extreme physical height when the Bloom Band passes directly under this (x,z) coordinate
-        height += audioCurve * amplitude * 1.5;
+        let targetDist = 0.0;
+        if (ws.progress <= 0.5) {
+            targetDist = 120.0 - (ws.progress / 0.5) * 120.0; // mix(120, 0)
+        } else {
+            targetDist = -((ws.progress - 0.5) / 0.5) * 120.0; // mix(0, -120)
+        }
+
+        // Camera corresponds precisely to the player world position. 
+        // Thus, 'distAlongWave' for the camera relative to itself is exactly 0.
+        const distToHill = Math.abs(targetDist);
+        const hillShape = 1.0 - smoothstep(0.0, 50.0, distToHill);
+
+        const audioCurve = Math.pow(Math.sin(ws.progress * Math.PI), 1.5);
+        let sharpCrest = hillShape * audioCurve;
+
+        const heightMultiplier = ws.isStrong ? 3.0 : 1.5;
+        // Add extreme physical height when the virtual hill passes exactly under the camera's location
+        height += sharpCrest * amplitude * heightMultiplier;
     }
 
     return height;

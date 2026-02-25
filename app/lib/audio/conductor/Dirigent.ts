@@ -46,7 +46,6 @@ export class Dirigent {
     private faceArpCycleIndex = 0;
     private lastFaceSynthKey: string = '';
     private lastMode: string = '';
-    private waveCycle: number = 0;
     private lastFaceOrchestraScale: number = -1;
     private lastFaceArpScale: number = -1;
     /** When we left face mode (Tone time); null while in face or after fade started */
@@ -105,7 +104,7 @@ export class Dirigent {
             this.timeLeftFace = null;
         }
 
-        this.waveCycle += globalData.delta;
+        // Time is tracked globally via AudioMetrics.globalTime
 
         if (time - this.lastWaveUpdateTime >= Dirigent.WAVE_UPDATE_INTERVAL) {
             this.lastWaveUpdateTime = time;
@@ -268,54 +267,31 @@ export class Dirigent {
         const swell = Math.max(0, Math.min(1, (waveY / amp + 1.0) / 2.0));
 
         const config = WAVE_SAMPLER_CONFIG;
+        const ws = AudioMetrics.waveState;
 
-        // Match the math from visual_common.glsl:
-        // phase = pos.x * freq + time * speed
-        // The wave crest (Bloom Band) sweeps predictably over space.
-        const phase1 = centerPos.x * freq + this.waveCycle * speed;
-
-        // We calculate distance to the nearest wave peak. Sine naturally peaks when phase % 2PI = ~1.5707 (PI/2).
-        // A math trick to find simply how "close" we are to the peak [0..1]
-        const normCrest = (Math.sin(phase1) + 1.0) * 0.5;
-
-        // Wave peaks strictly when normCrest approaches 1.0
-        // We use this to trigger the crashing audio sample
-
-        let p = -1.0;
         let audioCurve = 0.0;
-
-        // Trigger audio sample actively while we are in the top 20% width of the wave's peak
-        if (normCrest > 0.8) {
-            // Map 0.8 -> 1.0 -> 0.8 back into a 0.0 -> 1.0 curve representing our physical presence inside the bloom band
-            const presence = (normCrest - 0.8) * 5.0; // 0.0 to 1.0
-
-            // Because the sound peaks in the middle of the sample visually, we map it identically
-            audioCurve = Math.pow(presence, 1.5);
-
-            // Export this physical audio trigger to visually render the crest accurately
-            p = presence;
+        if (ws.active) {
+            // Visual wave is [0..1] over 6 seconds.
+            // Map the audio crash exclusively to the middle 3 seconds (progress 0.25 -> 0.75)
+            const p = (ws.progress - 0.25) / 0.5;
+            if (p >= 0.0 && p <= 1.0) {
+                audioCurve = Math.pow(Math.sin(p * Math.PI), 1.5);
+            }
         }
-
-        const isStrong = Math.floor(this.waveCycle / config.period) % 10 === 0;
-
-        AudioMetrics.audioWaveProgress = p;
 
         // The crashing waterfall is the primary volume driver, while the general visual swell acts as a bed
         const intensity = config.baseVolume
             + (swell * 0.1)
-            + (audioCurve * (isStrong ? 0.35 : 0.20));
+            + (audioCurve * (ws.isStrong ? 0.35 : 0.20));
 
         const filterFreq = 600
             + (swell * 300)
-            + (audioCurve * (isStrong ? 1500 : 800));
+            + (audioCurve * (ws.isStrong ? 1500 : 800));
 
-        // Lock the audio wavefront physical source origin location perfectly statically to the 
-        // +X direction (PI/2), because the visual Bloom Band propagates perfectly along -X uniformly.
-        const waveAngle = Math.PI / 2;
-
+        // Pass the waveAngle directly. RotationSpatializer perfectly handles the HRTF
         const listenerYaw = listenerForward ? forwardToYaw(listenerForward) : 0;
 
-        this.waveRevolver.update(intensity, filterFreq, listenerYaw, waveAngle, time);
+        this.waveRevolver.update(intensity, filterFreq, listenerYaw, ws.angle, time);
     }
 
     public dispose() {

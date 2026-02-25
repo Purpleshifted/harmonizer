@@ -6,6 +6,8 @@ import * as Tone from 'tone';
 import { useControls, folder } from 'leva';
 import { Orchestrator } from '../../../../lib/audio/conductor/Orchestrator';
 import { DetectionResult } from '../hooks/useSpatialDetection';
+import { AudioMetrics } from '../../../../lib/audio/AudioMetrics';
+import { WAVE_SAMPLER_CONFIG } from '../../../../lib/audio/sources/Sampler';
 
 interface AudioControllerProps {
     isAudioReady: boolean;
@@ -70,7 +72,28 @@ export function AudioController({ isAudioReady, detectionRef, keyHoldSecRef, isM
     }, [mixerControls.masterVol]);
 
     // 4. Main Audio Pulse Hook (Drives Orchestrator)
-    useFrame((_, delta) => {
+    useFrame(({ clock }, delta) => {
+        const time = clock.getElapsedTime();
+        AudioMetrics.globalTime = time;
+
+        // Smooth continuous 144Hz wave state for accurate physics and shaders
+        const period = WAVE_SAMPLER_CONFIG.period;
+        const visualDuration = 6.0; // Extend visual presence to 6s (wave starts from afar before audio)
+        const cyclePos = time % period;
+        const cycleIndex = Math.floor(time / period);
+        const isStrong = cycleIndex % 3 === 0;
+        const waveAngle = cycleIndex * Math.PI * 0.43;
+        const active = cyclePos < visualDuration;
+        const progress = active ? cyclePos / visualDuration : -1.0;
+
+        AudioMetrics.audioWaveProgress = progress; // Legacy compatibility
+        AudioMetrics.waveState = {
+            active,
+            progress,
+            angle: waveAngle,
+            isStrong
+        };
+
         const detection = detectionRef.current;
         if (!isAudioReady || !detection || !orchestratorRef.current) return;
 

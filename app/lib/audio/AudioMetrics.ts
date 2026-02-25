@@ -11,7 +11,14 @@ export const AudioMetrics = {
         pos: { x: 0, y: 0, z: 0 }
     },
     defaultEyeLevel: 5.0,
+    globalTime: 0.0,
     audioWaveProgress: -1.0,
+    waveState: {
+        active: false,
+        progress: -1.0,
+        angle: 0.0,
+        isStrong: false,
+    },
     waveParams: {
         amplitude: 1.2,
         frequency: 0.05,

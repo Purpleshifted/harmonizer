@@ -165,7 +165,14 @@ export function GridLines({ isMajor }: GridLinesProps) {
         uniforms.uWaveAmplitude.value = waveConfig.waveAmplitude;
         uniforms.uWaveFrequency.value = waveConfig.waveFrequency;
         uniforms.uWaveSpeed.value = waveConfig.waveSpeed;
-        uniforms.uAudioWaveProgress.value = AudioMetrics.audioWaveProgress;
+
+        const ws = AudioMetrics.waveState;
+        uniforms.uWaveActive.value = ws.active ? 1 : 0;
+        uniforms.uWaveProgress.value = ws.progress;
+        uniforms.uWaveAngle.value = ws.angle;
+        uniforms.uWaveIsStrong.value = ws.isStrong ? 1 : 0;
+        uniforms.uPlayerWorldPos.value.copy(playerPos);
+
         uniforms.uPlayerPos.value.copy(playerPos);
         uniforms.uGridOffset.value.set(snappedPos.x, 0, snappedPos.z);
 

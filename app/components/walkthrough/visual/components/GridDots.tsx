@@ -178,7 +178,14 @@ export function GridDots({ setLocationInfo, onDetectionUpdate, isMajor }: GridDo
         dm.uniforms.uWaveAmplitude.value = waveConfig.waveAmplitude;
         dm.uniforms.uWaveFrequency.value = waveConfig.waveFrequency;
         dm.uniforms.uWaveSpeed.value = waveConfig.waveSpeed;
-        dm.uniforms.uAudioWaveProgress.value = AudioMetrics.audioWaveProgress;
+
+        const ws = AudioMetrics.waveState;
+        dm.uniforms.uWaveActive.value = ws.active ? 1 : 0;
+        dm.uniforms.uWaveProgress.value = ws.progress;
+        dm.uniforms.uWaveAngle.value = ws.angle;
+        dm.uniforms.uWaveIsStrong.value = ws.isStrong ? 1 : 0;
+        dm.uniforms.uPlayerWorldPos.value.copy(playerPos);
+
         dm.uniforms.uPlayerPos.value.copy(playerPos);
         dm.uniforms.uGridOffset.value.set(snappedPos.x, 0, snappedPos.z);
 

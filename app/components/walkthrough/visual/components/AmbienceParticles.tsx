@@ -163,9 +163,16 @@ export function AmbienceParticles({ isMajor, mode }: AmbienceParticlesProps) {
                 finalPos += vec3(noiseX, noiseY, noiseZ) * mix(2.0, 0.5, uNodeFactor);
                 finalPos += bumpDir * audioJump * (1.0 - uNodeFactor); // Only bump when NOT in node mode
                 
-                // Tidal wave sweep! Particles get pulled by the wave's force and gently bob up
-                finalPos += wave.sweepForce * (1.0 - uNodeFactor);
-                finalPos.y += wave.height * 0.3 * (1.0 - uNodeFactor);
+                // Natural water turbulence: drastically reduced to a very subtle, slow drift.
+                float turbulence = length(wave.sweepForce) * 0.02;
+                vec3 eddy = vec3(
+                    sin(uTime * 0.3 + aRandom * 20.0),
+                    cos(uTime * 0.2 + aRandom * 20.0),
+                    cos(uTime * 0.35 + aRandom * 20.0)
+                );
+                
+                finalPos += eddy * turbulence * (1.0 - uNodeFactor);
+                finalPos.y += wave.height * 0.01 * (1.0 - uNodeFactor);
                 
                 // Re-evaluate dist after bumps
                 dist = distance(finalPos, uPlayerPos);
@@ -285,7 +292,13 @@ export function AmbienceParticles({ isMajor, mode }: AmbienceParticlesProps) {
         dm.uniforms.uWaveAmplitude.value = AudioMetrics.waveParams.amplitude;
         dm.uniforms.uWaveFrequency.value = AudioMetrics.waveParams.frequency;
         dm.uniforms.uWaveSpeed.value = AudioMetrics.waveParams.speed;
-        dm.uniforms.uAudioWaveProgress.value = AudioMetrics.audioWaveProgress;
+
+        const ws = AudioMetrics.waveState;
+        dm.uniforms.uWaveActive.value = ws.active ? 1 : 0;
+        dm.uniforms.uWaveProgress.value = ws.progress;
+        dm.uniforms.uWaveAngle.value = ws.angle;
+        dm.uniforms.uWaveIsStrong.value = ws.isStrong ? 1 : 0;
+        dm.uniforms.uPlayerWorldPos.value.copy(playerPos);
 
         dm.uniforms.uSpeed.value = dustSpeed;
         dm.uniforms.uSize.value = dustSize;
