@@ -29,7 +29,7 @@ export function GridDots({ detectionRef }: GridDotsProps) {
     const smoothMajorRef = useRef(0);
     const smoothNeutralRef = useRef(1.0);
 
-    const waveConfig = useWaveConfig();
+    const [waveConfig] = useWaveConfig();
 
     const {
         dotSize,
@@ -44,17 +44,17 @@ export function GridDots({ detectionRef }: GridDotsProps) {
         nodeColorStart,
         nodeColorFade,
     } = useControls('Terrain Grid', {
-        dotSize: { value: getInitialValue('dotSize', 0.05), min: 0.02, max: 2.0 },
-        dotOpacity: { value: getInitialValue('dotOpacity', 0.8), min: 0, max: 1 },
-        nodeBaseEmissive: { value: getInitialValue('nodeBaseEmissive', 1.2), min: 0.1, max: 15, label: '✨ Base Glow' },
+        dotSize: { value: getInitialValue('dotSize', 0.1), min: 0.02, max: 2.0 },
+        dotOpacity: { value: getInitialValue('dotOpacity', 0.6), min: 0, max: 1 },
+        nodeBaseEmissive: { value: getInitialValue('nodeBaseEmissive', 0.7), min: 0.1, max: 15, label: '✨ Base Glow' },
         nodeMajorBloomColor: { value: getInitialValue('nodeMajorBloomColor', '#ffe28a') },
         nodeMinorBloomColor: { value: getInitialValue('nodeMinorBloomColor', '#98c0ff') },
         nodeNeutralBloomColor: { value: getInitialValue('nodeNeutralBloomColor', '#b8b8b8'), label: 'Neutral' },
         nodeBloomStart: { value: getInitialValue('nodeBloomStart', 30), min: 0, max: 150, label: '🔆 Start' },
         nodeBloomFade: { value: getInitialValue('nodeBloomFade', 20), min: 0, max: 150, label: '🔆 Fade' },
         nodeBloomIntensity: { value: getInitialValue('nodeBloomIntensity', 5.0), min: 1, max: 8, label: '🔆 Power' },
-        nodeColorStart: { value: getInitialValue('nodeColorStart', 35), min: 0, max: 150, label: '🎨 Start' },
-        nodeColorFade: { value: getInitialValue('nodeColorFade', 85), min: 0, max: 150, label: '🎨 Fade' },
+        nodeColorStart: { value: getInitialValue('nodeColorStart', 20), min: 0, max: 150, label: '🎨 Start' },
+        nodeColorFade: { value: getInitialValue('nodeColorFade', 50), min: 0, max: 150, label: '🎨 Fade' },
     });
 
     // 1. Static Buffer (CPU Optimized)
@@ -85,7 +85,7 @@ export function GridDots({ detectionRef }: GridDotsProps) {
             ...BLOOM_UNIFORMS(),
             uSize: { value: 0.25 },
             uOpacity: { value: 0.8 },
-            uBaseEmissive: { value: 1.2 },
+            uBaseEmissive: { value: 0.7 },
         },
         vertexShader: `
             ${WAVE_VERTEX_CHUNK}
