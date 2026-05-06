@@ -19,7 +19,7 @@ export function useWaveConfig() {
         waveAmplitude: { value: 0.7, min: 0, max: 5, step: 0.1, label: 'Amplitude' },
         waveFrequency: { value: 0.05, min: 0.01, max: 0.5, step: 0.01, label: 'Frequency' },
         waveSpeed: { value: 0.9, min: 0, max: 5, step: 0.1, label: 'Speed' },
-        defaultEyeLevel: { value: 5.0, min: 1, max: 20, step: 0.5, label: 'Eye Level' },
+        defaultEyeLevel: { value: 4.0, min: 1, max: 20, step: 0.5, label: 'Eye Level' },
     }));
 
     // Eye level sync (Audio & Control)
@@ -45,7 +45,7 @@ export function useWaveConfig() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [config.defaultEyeLevel, setConfig]);
 
-    return config;
+    return [config, setConfig] as const;
 }
 
 // Wave height calculation
@@ -112,13 +112,20 @@ export interface WaveConfig {
     defaultEyeLevel: number;
 }
 
+// Control interface for external mutation (e.g. mobile UI)
+export interface WaveControl {
+    setDefaultEyeLevel: (value: number) => void;
+    adjustDefaultEyeLevel: (delta: number) => void;
+}
+
 // Helper to create wave config context (optional, for deep prop drilling avoidance)
-import { useRef, useMemo, createContext, useContext } from 'react';
+import { useRef, useMemo, createContext, useContext, useCallback } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { getInitialValue } from './Persistence';
 import { getNodeWorldPosition } from '../../../../../app/lib/tonnetz/tonnetz-grid';
 
 export const WaveConfigContext = createContext<WaveConfig | null>(null);
+export const WaveControlContext = createContext<WaveControl | null>(null);
 
 export function useWaveConfigContext() {
     const ctx = useContext(WaveConfigContext);
@@ -128,12 +135,20 @@ export function useWaveConfigContext() {
     return ctx;
 }
 
+export function useWaveControlContext() {
+    const ctx = useContext(WaveControlContext);
+    if (!ctx) {
+        throw new Error('useWaveControlContext must be used within WaveControlContext.Provider');
+    }
+    return ctx;
+}
+
 interface WaveSystemProps {
     children: React.ReactNode;
 }
 
 export function WaveSystem({ children }: WaveSystemProps) {
-    const config = useWaveConfig();
+    const [config, setConfig] = useWaveConfig();
 
     // Create simpler config object for context
     const contextValue: WaveConfig = {
@@ -143,9 +158,21 @@ export function WaveSystem({ children }: WaveSystemProps) {
         defaultEyeLevel: config.defaultEyeLevel,
     };
 
+    const controlValue: WaveControl = useMemo(() => ({
+        setDefaultEyeLevel: (value: number) => {
+            const clamped = Math.max(1, Math.min(20, value));
+            setConfig({ defaultEyeLevel: clamped });
+        },
+        adjustDefaultEyeLevel: (delta: number) => {
+            setConfig({ defaultEyeLevel: Math.max(1, Math.min(20, config.defaultEyeLevel + delta)) });
+        },
+    }), [config.defaultEyeLevel, setConfig]);
+
     return (
         <WaveConfigContext.Provider value={contextValue}>
-            {children}
+            <WaveControlContext.Provider value={controlValue}>
+                {children}
+            </WaveControlContext.Provider>
         </WaveConfigContext.Provider>
     );
 }

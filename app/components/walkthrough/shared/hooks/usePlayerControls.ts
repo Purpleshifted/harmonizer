@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useMobileAccelerometer } from './useMobileAccelerometer';
+import { useMobileDetect } from './useMobileDetect';
 
-interface MovementState {
+export interface MovementState {
     forward: boolean;
     backward: boolean;
     left: boolean;
@@ -10,30 +12,37 @@ interface MovementState {
 }
 
 /**
- * Hook to handle WASD keyboard controls for player movement
+ * Hook to handle WASD keyboard controls for player movement.
+ * On mobile, also merges accelerometer-based tilt input.
  */
 export function usePlayerControls(): MovementState {
-    const [movement, setMovement] = useState<MovementState>({
+    const isMobile = useMobileDetect();
+
+    // Keyboard state (works on all devices)
+    const [keyboard, setKeyboard] = useState<MovementState>({
         forward: false,
         backward: false,
         left: false,
         right: false,
     });
 
+    // Accelerometer state (only active on mobile)
+    const accel = useMobileAccelerometer(isMobile);
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             switch (e.code) {
                 case 'KeyW':
-                    setMovement((m) => ({ ...m, forward: true }));
+                    setKeyboard((m) => ({ ...m, forward: true }));
                     break;
                 case 'KeyS':
-                    setMovement((m) => ({ ...m, backward: true }));
+                    setKeyboard((m) => ({ ...m, backward: true }));
                     break;
                 case 'KeyA':
-                    setMovement((m) => ({ ...m, left: true }));
+                    setKeyboard((m) => ({ ...m, left: true }));
                     break;
                 case 'KeyD':
-                    setMovement((m) => ({ ...m, right: true }));
+                    setKeyboard((m) => ({ ...m, right: true }));
                     break;
             }
         };
@@ -41,16 +50,16 @@ export function usePlayerControls(): MovementState {
         const handleKeyUp = (e: KeyboardEvent) => {
             switch (e.code) {
                 case 'KeyW':
-                    setMovement((m) => ({ ...m, forward: false }));
+                    setKeyboard((m) => ({ ...m, forward: false }));
                     break;
                 case 'KeyS':
-                    setMovement((m) => ({ ...m, backward: false }));
+                    setKeyboard((m) => ({ ...m, backward: false }));
                     break;
                 case 'KeyA':
-                    setMovement((m) => ({ ...m, left: false }));
+                    setKeyboard((m) => ({ ...m, left: false }));
                     break;
                 case 'KeyD':
-                    setMovement((m) => ({ ...m, right: false }));
+                    setKeyboard((m) => ({ ...m, right: false }));
                     break;
             }
         };
@@ -64,5 +73,11 @@ export function usePlayerControls(): MovementState {
         };
     }, []);
 
-    return movement;
+    // Merge: either keyboard OR accelerometer triggers movement
+    return useMemo(() => ({
+        forward: keyboard.forward || accel.forward,
+        backward: keyboard.backward || accel.backward,
+        left: keyboard.left || accel.left,
+        right: keyboard.right || accel.right,
+    }), [keyboard, accel]);
 }
